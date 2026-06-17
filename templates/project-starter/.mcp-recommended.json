@@ -1,0 +1,69 @@
+{
+  "_comment": "Recommended starter MCP configuration for code4me projects. Copy to your project root as `.mcp.json`, edit per project shape, remove this _comment key (JSON doesn't support comments — keys starting with underscore are convention only). See the README 'MCP support' section for guidance on which subagent prefers which MCP.",
+
+  "mcpServers": {
+    "sequential-thinking": {
+      "_purpose": "Structured chain-of-thought reasoning. Useful for Lead Architect, Challenger Architect, Researcher, Product Coach on complex problems.",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+    },
+
+    "filesystem": {
+      "_purpose": "Sandboxed file IO for agents that need read/write outside the immediate project context.",
+      "_disabled_by_default": "Uncomment and configure the allowed directory if you need it; otherwise the standard Read/Edit/Write tools cover normal cases.",
+      "_command": "npx",
+      "_args": ["-y", "@modelcontextprotocol/server-filesystem", "/absolute/path/to/allowed/dir"]
+    },
+
+    "github": {
+      "_purpose": "PRs, issues, code search across your GitHub repos. Useful for Producer (ticket triage), Developer (PR shape), Code Reviewer (PR context).",
+      "_setup": "Set GITHUB_PERSONAL_ACCESS_TOKEN in your shell environment before invoking Claude Code. Use a fine-grained PAT scoped to the repos you want the agent to access.",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
+    },
+
+    "playwright": {
+      "_purpose": "Real-browser automation via accessibility tree. Useful for Verification + QA on web-touching projects: real clicks, real screenshots, accessibility-tree snapshots (much more token-efficient than image captures). Pairs with the codex-developer/codex-code-reviewer review-spec-fit mode for visual verification.",
+      "_disabled_by_default": "Web/UI work only. If your project is server-only, library code, native desktop, or anything without a browser surface, leave this disabled. First run downloads a Chromium binary (~150MB).",
+      "_command": "npx",
+      "_args": ["-y", "@playwright/mcp@latest"]
+    },
+
+    "sentry": {
+      "_purpose": "Production error context for QA and Developer when investigating reported bugs.",
+      "_setup": "Set SENTRY_AUTH_TOKEN and SENTRY_ORG. Skip this server if your project doesn't use Sentry.",
+      "_disabled_by_default": "Uncomment when you've set up Sentry credentials.",
+      "_command": "npx",
+      "_args": ["-y", "@sentry/mcp-server"],
+      "_env": {
+        "SENTRY_AUTH_TOKEN": "${SENTRY_AUTH_TOKEN}",
+        "SENTRY_ORG": "${SENTRY_ORG}"
+      }
+    },
+
+    "postgres": {
+      "_purpose": "Read-only schema/query access for Developer, Verification, QA on data-shape questions. The reference implementation is archived; use a vendor-official Postgres MCP server (Neon, Supabase, etc.) or a community fork — pin the version.",
+      "_disabled_by_default": "Configure with your project's connection string; ensure the role is read-only.",
+      "_command": "npx",
+      "_args": ["-y", "<your-chosen-postgres-mcp>"],
+      "_env": {
+        "DATABASE_URL": "${READ_ONLY_DATABASE_URL}"
+      }
+    }
+  },
+
+  "_subagent_preferences": {
+    "_comment": "Document in your project CLAUDE.md which subagent should prefer which MCP. Suggested defaults:",
+    "Producer": ["github (issues/PR triage)"],
+    "Lead Architect / Challenger Architect": ["sequential-thinking (deep reasoning)"],
+    "Researcher": ["sequential-thinking", "github (cross-repo lookups)"],
+    "Developer": ["github (PR context)", "postgres (data-shape)", "playwright (UI scaffolds — web projects only)"],
+    "Verification": ["postgres (data verification)", "playwright (UI smoke + screenshots — web projects only)"],
+    "QA": ["sentry (prior incidents)", "playwright (exploratory UI — web projects only)"],
+    "Code Reviewer": ["github (PR context)"],
+    "Security Reviewer / codex-security-reviewer": ["github (dependency manifest history)"]
+  }
+}

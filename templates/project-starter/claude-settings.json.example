@@ -1,0 +1,69 @@
+{
+  "_destination": "Copy this file to your project's .claude/settings.json (note the leading dot on .claude). The leading-dot directory is what Claude Code reads at session start.",
+
+  "_comment": "Code4Me starter settings.json. Replace <PLUGIN_DIR> with the absolute path to the code4me plugin's checkout (e.g., /Users/you/.claude/plugins/code4me, or wherever you cloned the repo). Use absolute paths — tilde and environment-variable expansion in hook commands is fragile across shells. NOTE: wire hooks here when code4me is referenced by path (not installed via the Claude Code plugin system). Path-referenced plugins do NOT auto-load their bundled hooks/hooks.json; settings.json is the reliable mechanism.",
+
+  "env": {
+    "ENABLE_LSP_TOOL": "1"
+  },
+
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash <PLUGIN_DIR>/hooks/check-test-protection.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash <PLUGIN_DIR>/hooks/check-forbidden-conditions.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash <PLUGIN_DIR>/hooks/check-critical-write-allowlist.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Grep|Edit|Write|MultiEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash <PLUGIN_DIR>/hooks/check-buglog-helper.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Grep|mcp__plugin_context-mode_context-mode__ctx_execute|mcp__plugin_context-mode_context-mode__ctx_execute_file|mcp__plugin_context-mode_context-mode__ctx_batch_execute",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash <PLUGIN_DIR>/hooks/check-lsp-first-on-source.sh"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash <PLUGIN_DIR>/hooks/check-session-wiring.sh"
+          }
+        ]
+      }
+    ]
+  },
+
+  "_notes": {
+    "lsp_tool": "ENABLE_LSP_TOOL=1 turns on LSP-backed code intelligence for any language server you declare in .lsp.json. The plugin ships LSP configs for C# (Roslyn), Swift (SourceKit-LSP), C++ (clangd), and Python (Pyright). See README 'LSP support' for install routes.",
+    "write_hooks": "check-test-protection, check-forbidden-conditions, check-critical-write-allowlist gate Edit/Write/MultiEdit and return permissionDecision: ask (never deny) when their .code4me/ state files are present; they pass through silently otherwise.",
+    "buglog_hook": "check-buglog-helper.sh redirects whole-file Read/Grep/raw-shell reads of .wolf/buglog.json to `code4me-buglog search|get|stats`, and Edit/Write/shell-writes to `add|update`. Self-disables when there is no .wolf/buglog.json. Matcher includes Bash so it can catch `cat .wolf/buglog.json`; it exits immediately on commands that don't reference the buglog (and exempts commands invoking code4me-buglog itself).",
+    "lsp_first_hook": "check-lsp-first-on-source.sh ask-gates symbol-shaped Read/Grep/ctx_execute calls against source files declared in .lsp.json; auto-no-ops when .lsp.json is absent. Events log at .code4me/lsp-first-events.jsonl.",
+    "session_start_hook": "check-session-wiring.sh is a read-only SessionStart detector: it nudges (never writes) when a hook or .lsp.json path can\u0027t resolve on this machine, pointing you to code4me-install. Silent when wiring is correct or absent.",
+    "plugin_install_vs_path": "If you instead install code4me through the Claude Code plugin system, its hooks/hooks.json (LSP-first + buglog) auto-loads and you can drop the lsp_first and buglog blocks here — keep only the three opt-in write hooks. When referencing by path (this template's assumption), keep all blocks. Verify what's actually loaded with the /hooks command.",
+    "removing_hooks": "If you remove the hooks, the prompt-level rules still apply via the subagent prompts and skills/code4me/references/tooling.md — you lose the runtime defense-in-depth layer, not the protection itself."
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "_destination": "Copy this file to your project's .code4me/trello-config.json. Run /code4me-trello-init to populate the IDs interactively, OR fill them in manually from the Trello UI (board ID is in the board URL; list/label IDs are visible via the Trello API or the get_lists / get_labels MCP tools).",
+
+  "_comment": "Code4Me Trello sync configuration. Read by the skills/trello-sync/ skill at every state-transition moment. When this file is absent or malformed, the trello-sync skill silently no-ops — the milestone-status-tracker continues to work as the source of truth.",
+
+  "board_id": "REPLACE_WITH_TRELLO_BOARD_ID",
+
+  "list_ids": {
+    "_comment": "The six Kanban lists. Mapping per skills/trello-sync/references/columns.md.",
+    "inbox": "REPLACE_WITH_LIST_ID",
+    "in_progress": "REPLACE_WITH_LIST_ID",
+    "in_review": "REPLACE_WITH_LIST_ID",
+    "blocked": "REPLACE_WITH_LIST_ID",
+    "pending_user": "REPLACE_WITH_LIST_ID",
+    "done": "REPLACE_WITH_LIST_ID"
+  },
+
+  "label_ids": {
+    "_comment": "Three label categories: weight (4 options), kind (6 options), vendor mix (3 options). Each card gets exactly one label from each category.",
+
+    "weight_conversation": "REPLACE_WITH_LABEL_ID",
+    "weight_light": "REPLACE_WITH_LABEL_ID",
+    "weight_standard": "REPLACE_WITH_LABEL_ID",
+    "weight_critical": "REPLACE_WITH_LABEL_ID",
+
+    "kind_product": "REPLACE_WITH_LABEL_ID",
+    "kind_bug_fix": "REPLACE_WITH_LABEL_ID",
+    "kind_tech_debt": "REPLACE_WITH_LABEL_ID",
+    "kind_spike": "REPLACE_WITH_LABEL_ID",
+    "kind_incident": "REPLACE_WITH_LABEL_ID",
+    "kind_scope_change": "REPLACE_WITH_LABEL_ID",
+
+    "vendor_claude": "REPLACE_WITH_LABEL_ID",
+    "vendor_codex": "REPLACE_WITH_LABEL_ID",
+    "vendor_cross_vendor": "REPLACE_WITH_LABEL_ID"
+  },
+
+  "tool_overrides": {
+    "_comment": "If your Trello MCP server uses different tool names than delorenj/mcp-server-trello's defaults, map them here. Otherwise leave as-is.",
+    "add_card": "mcp__trello__add_card_to_list",
+    "move_card": "mcp__trello__move_card_to_list",
+    "update_card": "mcp__trello__update_card_details",
+    "archive_card": "mcp__trello__archive_card"
+  },
+
+  "_recommendations": {
+    "gitignore": "Recommended to add `.code4me/trello-config.json` to your .gitignore. Each team member should have their own Trello board (or a shared one if everyone has access); committing this file requires everyone to have Trello access to the same board.",
+    "smoke_test": "After populating, the trello-sync skill will exercise the wiring on the next state transition. Watch for errors in `.code4me/trello-sync-errors.jsonl` — if it's empty after a milestone, sync is working."
+  }
+}

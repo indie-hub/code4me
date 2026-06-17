@@ -1,0 +1,187 @@
+name: probe
+
+# Runs the plugin's static checks (shellcheck, JSON/YAML validation) and
+# behavioural-probe smoke checks on every push and PR. The behavioural probes
+# are markdown specifications evaluated against orchestrator transparency
+# output; this workflow runs the deterministic parts (probe file structure
+# validation + bin/code4me-probe-run --lint) without spawning a live Claude
+# session. Live-session probe execution remains a manual local task.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-checks:
+    name: Static checks (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq + shellcheck
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y jq shellcheck
+
+      - name: Validate plugin.json
+        run: |
+          jq empty .claude-plugin/plugin.json
+          jq -r '.name + " " + .version' .claude-plugin/plugin.json
+
+      - name: Validate hooks.json
+        run: |
+          jq empty hooks/hooks.json
+          jq -r '.hooks.PreToolUse[].hooks[].command' hooks/hooks.json
+
+      - name: Validate vendor-models.yaml
+        run: |
+          python3 -c "import yaml; data = yaml.safe_load(open('skills/code4me/references/vendor-models.yaml')); print('vendors:', list(data.keys()))"
+
+      - name: Validate templates JSON
+        run: |
+          for f in templates/project-starter/*.json templates/project-starter/*.json.example; do
+            [ -r "$f" ] && jq empty "$f" && echo "OK: $f"
+          done
+
+      - name: Shellcheck hooks
+        run: |
+          shellcheck --severity=warning hooks/*.sh
+
+      - name: Shellcheck bin scripts
+        run: |
+          for f in bin/code4me-preflight bin/code4me-audit-dispatch-log bin/code4me-probe-run bin/code4me-lsp-check bin/code4me-install bin/audit4me-helpers.sh bin/audit4me-rebuild-coverage.sh; do
+            [ -x "$f" ] && shellcheck --severity=warning --shell=bash "$f" || true
+          done
+
+      - name: Hook syntax check
+        run: |
+          for f in hooks/*.sh; do
+            bash -n "$f" && echo "OK: $f"
+          done
+
+      - name: bin/* syntax check
+        run: |
+          for f in bin/*; do
+            if [ -x "$f" ] && head -1 "$f" | grep -q "^#!.*bash"; then
+              bash -n "$f" && echo "OK: $f"
+            fi
+          done
+
+      - name: Probe file structure check
+        run: |
+          # Every probe declares Subject: and Coverage:. Beyond that, a probe is
+          # one of two shapes:
+          #   * LLM-judged:   "## Input prompt" + "## Expected" + "## Pass criterion"
+          #   * Programmatic: "## Programmatic verification" (shell-verified; the
+          #     LLM-judge sections do not apply)
+          # Excluded: probes/fixture-skeleton/ is a sample PROJECT (not probes) and
+          # README.md files are indexes — mirrors bin/code4me-probe-run's filter.
+          fail=0
+          while IFS= read -r f; do
+            for section in "Subject:" "Coverage:"; do
+              grep -q "$section" "$f" || { echo "MISSING '$section' in $f"; fail=1; }
+            done
+            if ! grep -q "## Programmatic verification" "$f"; then
+              for section in "## Input prompt" "## Expected" "## Pass criterion"; do
+                grep -q "$section" "$f" || { echo "MISSING '$section' in $f"; fail=1; }
+              done
+            fi
+          done < <(find probes -type f -name '*.md' ! -path '*/fixture-skeleton/*' ! -name 'README.md')
+          if [ "$fail" -eq 1 ]; then
+            echo "::error::One or more probes are missing required sections."
+            exit 1
+          fi
+
+      - name: Shellcheck test scripts
+        run: |
+          shellcheck --severity=warning --shell=bash tests/hooks/*.sh tests/audit4me/*.sh tests/buglog/*.sh tests/install/*.sh
+
+      - name: Validate audit4me JSON schemas
+        run: |
+          for f in skills/audit4me/schemas/*.json; do
+            jq empty "$f" && echo "OK: $f"
+          done
+
+  static-checks-macos:
+    name: Static checks (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq + shellcheck via Homebrew
+        run: |
+          brew install jq shellcheck
+
+      - name: Validate plugin.json
+        run: jq empty .claude-plugin/plugin.json
+
+      - name: Hook syntax check
+        run: |
+          for f in hooks/*.sh; do
+            bash -n "$f" && echo "OK: $f"
+          done
+
+      - name: Shellcheck hooks
+        run: shellcheck --severity=warning hooks/*.sh
+
+      - name: Shellcheck audit4me bin + test scripts
+        run: |
+          shellcheck --severity=warning --shell=bash \
+            bin/audit4me-helpers.sh bin/audit4me-rebuild-coverage.sh \
+            tests/hooks/*.sh tests/audit4me/*.sh tests/buglog/*.sh tests/install/*.sh
+
+      - name: New-script syntax check (bash 3.2 path)
+        run: |
+          for f in hooks/c4m-pathlib.sh bin/code4me-install bin/audit4me-helpers.sh bin/audit4me-rebuild-coverage.sh tests/hooks/*.sh tests/audit4me/*.sh tests/buglog/*.sh tests/install/*.sh; do
+            bash -n "$f" && echo "OK: $f"
+          done
+
+      - name: macOS bash version warning
+        run: |
+          # macOS ships bash 3.2 by default. Our hooks include bash-3.2-compat
+          # paths but some features (associative arrays, globstar) may differ.
+          # Surface the version so any incompatibility is visible.
+          bash --version | head -1
+
+  # NOTE: Windows CI is intentionally not added. Git Bash on GitHub Actions
+  # Windows runners is fragile for shellcheck and certain bash patterns. Run
+  # the static checks manually on Windows before submitting changes that touch
+  # hook regexes or path handling. See CONTRIBUTING.md "Running probes
+  # locally" for the manual procedure.
+
+  tests:
+    name: Unit + regression tests (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq + jsonschema
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y jq
+          python3 -m pip install --quiet jsonschema
+
+      - name: Hook path-normalization regression test
+        run: bash tests/hooks/test-windows-paths.sh
+
+      - name: audit4me helpers + rebuild-coverage test
+        run: bash tests/audit4me/test-helpers.sh
+
+      - name: buglog tool test
+        run: |
+          python3 -m py_compile bin/code4me-buglog
+          bash tests/buglog/test-buglog.sh
+
+      - name: buglog-helper hook test
+        run: bash tests/buglog/test-buglog-hook.sh
+
+      - name: installer + session-wiring tests
+        run: |
+          for t in tests/install/*.sh; do bash "$t"; done

@@ -1,0 +1,46 @@
+# .gitattributes — line-ending discipline for cross-platform repos.
+#
+# Without this, Windows users cloning the repo may end up with CRLF line
+# endings in shell scripts, which breaks the `#!/usr/bin/env bash` shebang
+# (the kernel sees `bash\r` and can't find that interpreter). All hook
+# scripts and bin scripts MUST have LF line endings regardless of the
+# checkout platform.
+#
+# This file also protects JSON / YAML / markdown — JSON parsers tolerate
+# CRLF but some tooling chokes; the .lsp.json / hooks.json / probe results
+# JSONL files want LF for clean `jq` streaming.
+
+# ─── Shell scripts ──────────────────────────────────────────────────────
+*.sh        text eol=lf
+*.bash      text eol=lf
+
+# ─── Hook + bin scripts (explicit even though *.sh covers them) ─────────
+hooks/*           text eol=lf
+bin/code4me-*     text eol=lf
+bin/audit4me-*    text eol=lf
+
+# ─── Node / Python scripts ──────────────────────────────────────────────
+*.mjs       text eol=lf
+*.js        text eol=lf
+*.py        text eol=lf
+
+# ─── Config + data files (read by jq / programmatic tools) ──────────────
+*.json      text eol=lf
+*.jsonl     text eol=lf
+*.yaml      text eol=lf
+*.yml       text eol=lf
+*.toml      text eol=lf
+
+# ─── Markdown / prose ────────────────────────────────────────────────────
+*.md        text eol=lf
+*.txt       text eol=lf
+
+# ─── Binaries (no conversion) ───────────────────────────────────────────
+*.db        binary
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.pdf       binary
+*.zip       binary
+*.tar.gz    binary

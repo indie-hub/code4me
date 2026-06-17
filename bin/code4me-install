@@ -1,0 +1,215 @@
+#!/usr/bin/env bash
+# code4me-install — wire code4me into a project with correct, machine-local paths.
+#
+# Solves the "hardcoded path that can't exist on this machine" problem: instead of
+# hand-substituting <PLUGIN_DIR>, this script SELF-LOCATES the plugin (its own
+# parent dir) and writes the real absolute path into the project's config. It is
+# idempotent and re-runnable (self-heals when the plugin moves), and platform-aware
+# (Windows / macOS / Linux / WSL).
+#
+# What it does:
+#   1. Hooks  — merges code4me's PreToolUse hooks into <project>/.claude/settings.json
+#               with `bash <PLUGIN_ROOT>/hooks/<name>.sh`. Strips any prior code4me
+#               hook entries first (so stale/placeholder paths are replaced, never
+#               duplicated). Other settings + non-code4me hooks are preserved.
+#   2. LSP    — regenerates <project>/.lsp.json tailored to THIS platform and the
+#               LSP servers actually found on PATH:
+#                 * C#   : roslyn-language-server(.cmd on Windows)
+#                 * Swift: `xcrun sourcekit-lsp` (macOS) | `sourcekit-lsp` (Linux/WSL)
+#                 * C/C++: clangd — wrapped by the node didopen-proxy on Windows
+#                          (Claude Code bug #29501), direct clangd elsewhere
+#               By default only servers that are present are written (so Claude Code
+#               doesn't error on a missing executable); --lsp-all writes all three.
+#
+# Every write backs up the prior file to <file>.bak first. --dry-run shows what
+# would change without writing.
+#
+# Usage:
+#   code4me-install [--project DIR] [--dry-run] [--no-hooks] [--no-lsp]
+#                   [--lsp-all] [--clang-proxy auto|always|never]
+#
+# Requires: bash, jq. (node is only needed at LSP runtime for the C++ proxy.)
+
+set -u
+
+die() { printf 'code4me-install: %s\n' "$*" >&2; exit 1; }
+command -v jq >/dev/null 2>&1 || die "jq is required"
+
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PLUGIN_ROOT="$( cd "${SCRIPT_DIR}/.." && pwd )"
+
+# ---- args ----
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+DRY_RUN=0; DO_HOOKS=1; DO_LSP=1; LSP_ALL=0; CLANG_PROXY="auto"
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --project) PROJECT_DIR="$2"; shift 2 ;;
+        --dry-run) DRY_RUN=1; shift ;;
+        --no-hooks) DO_HOOKS=0; shift ;;
+        --no-lsp) DO_LSP=0; shift ;;
+        --lsp-all) LSP_ALL=1; shift ;;
+        --clang-proxy) CLANG_PROXY="$2"; shift 2 ;;
+        --help|-h) sed -n '/^# /p' "$0" | sed 's/^# \{0,1\}//' | head -40; exit 0 ;;
+        *) die "unknown arg: $1 (try --help)" ;;
+    esac
+done
+[ -d "$PROJECT_DIR" ] || die "project dir not found: $PROJECT_DIR"
+PROJECT_DIR="$( cd "$PROJECT_DIR" && pwd )"
+
+# ---- platform ----
+case "$(uname -s 2>/dev/null)" in
+    Linux*)  if [ -n "${WSL_DISTRO_NAME:-}" ] || grep -qi microsoft /proc/version 2>/dev/null; then PLATFORM=wsl; else PLATFORM=linux; fi ;;
+    Darwin*) PLATFORM=macos ;;
+    MINGW*|MSYS*|CYGWIN*) PLATFORM=windows ;;
+    *) PLATFORM=unknown ;;
+esac
+is_windows() { [ "$PLATFORM" = "windows" ]; }
+
+note() { printf '  %s\n' "$*"; }
+backup_write() { # <path> <content>  (honours DRY_RUN)
+    local path="$1" content="$2"
+    if [ "$DRY_RUN" -eq 1 ]; then
+        printf '  [dry-run] would write %s\n' "$path"
+        if [ -f "$path" ]; then
+            printf '%s' "$content" | diff -u "$path" - | sed 's/^/    /' | head -40 || true
+        fi
+        return 0
+    fi
+    mkdir -p "$(dirname "$path")"
+    [ -f "$path" ] && cp "$path" "$path.bak"
+    local tmp; tmp="$(mktemp "$path.XXXX")"
+    printf '%s' "$content" > "$tmp" && mv "$tmp" "$path" || { rm -f "$tmp"; die "write failed: $path"; }
+    printf '  wrote %s%s\n' "$path" "$([ -f "$path.bak" ] && echo "  (backup: $path.bak)")"
+}
+
+printf 'code4me-install\n'
+printf '  plugin:   %s\n' "$PLUGIN_ROOT"
+printf '  project:  %s\n' "$PROJECT_DIR"
+printf '  platform: %s%s\n\n' "$PLATFORM" "$([ "$DRY_RUN" -eq 1 ] && echo '  (dry-run)')"
+
+# ================= hooks =================
+if [ "$DO_HOOKS" -eq 1 ]; then
+    printf 'Hooks -> .claude/settings.json\n'
+    SETTINGS="$PROJECT_DIR/.claude/settings.json"
+    EXISTING='{}'
+    if [ -r "$SETTINGS" ]; then
+        if ! EXISTING="$(jq -e . "$SETTINGS" 2>/dev/null)"; then
+            die "existing $SETTINGS is not valid JSON — fix or move it, then re-run"
+        fi
+    fi
+
+    # Fresh code4me hook blocks, with the real plugin path.
+    NEW_PRE="$(jq -n --arg root "$PLUGIN_ROOT" '[
+        { matcher:"Edit|Write|MultiEdit", hooks:[
+            {type:"command", command:("bash "+$root+"/hooks/check-test-protection.sh")},
+            {type:"command", command:("bash "+$root+"/hooks/check-forbidden-conditions.sh")},
+            {type:"command", command:("bash "+$root+"/hooks/check-critical-write-allowlist.sh")} ]},
+        { matcher:"Read|Grep|Edit|Write|MultiEdit|Bash", hooks:[
+            {type:"command", command:("bash "+$root+"/hooks/check-buglog-helper.sh")} ]},
+        { matcher:"Read|Grep|mcp__plugin_context-mode_context-mode__ctx_execute|mcp__plugin_context-mode_context-mode__ctx_execute_file|mcp__plugin_context-mode_context-mode__ctx_batch_execute", hooks:[
+            {type:"command", command:("bash "+$root+"/hooks/check-lsp-first-on-source.sh")} ]}
+      ]')"
+    NEW_SS="$(jq -n --arg root "$PLUGIN_ROOT" '[
+        { hooks:[ {type:"command", command:("bash "+$root+"/hooks/check-session-wiring.sh")} ] } ]')"
+
+    # Merge: drop any prior code4me hook commands (replace stale paths), keep the
+    # rest, then append fresh blocks. Idempotent across PreToolUse + SessionStart.
+    MERGED="$(printf '%s' "$EXISTING" | jq --argjson pre "$NEW_PRE" --argjson ss "$NEW_SS" '
+      def ours: test("/hooks/(check-test-protection|check-forbidden-conditions|check-critical-write-allowlist|check-buglog-helper|check-lsp-first-on-source|check-session-wiring)\\.sh");
+      def strip(arr): [ arr[] | .hooks = [ .hooks[] | select((.command // "") | ours | not) ] | select((.hooks | length) > 0) ];
+      .hooks //= {} |
+      .hooks.PreToolUse   = ( strip(.hooks.PreToolUse   // []) + $pre ) |
+      .hooks.SessionStart = ( strip(.hooks.SessionStart // []) + $ss )
+      ')"
+    backup_write "$SETTINGS" "$MERGED"
+    note "wired 5 PreToolUse hooks (3 write-protection + buglog + lsp-first) + 1 SessionStart detector at $PLUGIN_ROOT/hooks/"
+    printf '\n'
+fi
+
+# ================= lsp =================
+if [ "$DO_LSP" -eq 1 ]; then
+    printf 'LSP -> .lsp.json (probing servers on PATH)\n'
+
+    have() { command -v "$1" >/dev/null 2>&1; }
+    first_cmd() { for c in "$@"; do if have "$c"; then printf '%s' "$c"; return 0; fi; done; return 1; }
+
+    LSP_OBJ='{}'
+    add_lang() { LSP_OBJ="$(jq --arg k "$1" --argjson e "$2" '. + {($k): $e}' <<<"$LSP_OBJ")"; }
+    SKIPPED=""
+
+    # --- C# (Roslyn) ---
+    CS_CMD="$(first_cmd roslyn-language-server.cmd roslyn-language-server || true)"
+    if [ -n "$CS_CMD" ] || [ "$LSP_ALL" -eq 1 ]; then
+        [ -n "$CS_CMD" ] || CS_CMD="$(is_windows && echo roslyn-language-server.cmd || echo roslyn-language-server)"
+        add_lang csharp "$(jq -n --arg cmd "$CS_CMD" '{
+            command:$cmd,
+            args:["--stdio","--autoLoadProjects","--logLevel","Information","--extensionLogDirectory",".code4me/lsp-logs"],
+            transport:"stdio",
+            extensionToLanguage:{".cs":"csharp",".csx":"csharp",".cshtml":"csharp"},
+            initializationOptions:{}, settings:{}, startupTimeout:120000 }')"
+        note "C#    : $CS_CMD"
+    else
+        SKIPPED="${SKIPPED}  C#    : roslyn-language-server not on PATH — install: dotnet tool install --global roslyn-language-server --prerelease\n"
+    fi
+
+    # --- Swift (sourcekit-lsp) ---
+    if [ "$PLATFORM" = "macos" ]; then
+        if have xcrun || [ "$LSP_ALL" -eq 1 ]; then
+            add_lang swift "$(jq -n '{command:"xcrun", args:["sourcekit-lsp"], transport:"stdio",
+                extensionToLanguage:{".swift":"swift"}, initializationOptions:{}, settings:{}, startupTimeout:60000}')"
+            note "Swift : xcrun sourcekit-lsp"
+        else
+            SKIPPED="${SKIPPED}  Swift : xcrun not found — install Xcode or Command Line Tools\n"
+        fi
+    else
+        if have sourcekit-lsp || [ "$LSP_ALL" -eq 1 ]; then
+            add_lang swift "$(jq -n '{command:"sourcekit-lsp", args:[], transport:"stdio",
+                extensionToLanguage:{".swift":"swift"}, initializationOptions:{}, settings:{}, startupTimeout:60000}')"
+            note "Swift : sourcekit-lsp"
+        else
+            SKIPPED="${SKIPPED}  Swift : sourcekit-lsp not on PATH (skipped — uncommon off macOS)\n"
+        fi
+    fi
+
+    # --- C/C++ (clangd, optionally via the didopen proxy) ---
+    case "$CLANG_PROXY" in
+        always) WANT_PROXY=1 ;;
+        never)  WANT_PROXY=0 ;;
+        auto)   WANT_PROXY=$(is_windows && echo 1 || echo 0) ;;
+        *) die "--clang-proxy must be auto|always|never" ;;
+    esac
+    CPP_EXT='{".cpp":"cpp",".cxx":"cpp",".cc":"cpp",".c++":"cpp",".hpp":"cpp",".hxx":"cpp",".hh":"cpp",".h++":"cpp",".h":"cpp",".c":"c"}'
+    if [ "$WANT_PROXY" -eq 1 ]; then
+        if { have node && have clangd; } || [ "$LSP_ALL" -eq 1 ]; then
+            add_lang cpp "$(jq -n --arg proxy "$PLUGIN_ROOT/bin/clangd-didopen-proxy.mjs" --argjson ext "$CPP_EXT" '{
+                command:"node", args:[$proxy,"--background-index","--clang-tidy"], transport:"stdio",
+                extensionToLanguage:$ext, initializationOptions:{}, settings:{}, startupTimeout:60000}')"
+            note "C/C++ : node $PLUGIN_ROOT/bin/clangd-didopen-proxy.mjs (didopen proxy; bug #29501)"
+            have node  || SKIPPED="${SKIPPED}  (note) node not found — C++ proxy needs Node at runtime\n"
+            have clangd|| SKIPPED="${SKIPPED}  (note) clangd not found — install LLVM (winget install LLVM.LLVM)\n"
+        else
+            SKIPPED="${SKIPPED}  C/C++ : need node + clangd for the Windows proxy — install LLVM + Node\n"
+        fi
+    else
+        if have clangd || [ "$LSP_ALL" -eq 1 ]; then
+            add_lang cpp "$(jq -n --argjson ext "$CPP_EXT" '{
+                command:"clangd", args:["--background-index","--clang-tidy"], transport:"stdio",
+                extensionToLanguage:$ext, initializationOptions:{}, settings:{}, startupTimeout:60000}')"
+            note "C/C++ : clangd (direct — no proxy on $PLATFORM)"
+        else
+            SKIPPED="${SKIPPED}  C/C++ : clangd not on PATH — install: brew install llvm | apt install clangd\n"
+        fi
+    fi
+
+    if [ "$(jq 'length' <<<"$LSP_OBJ")" -eq 0 ]; then
+        note "no LSP servers detected; .lsp.json not written (run with --lsp-all to scaffold anyway)"
+    else
+        backup_write "$PROJECT_DIR/.lsp.json" "$(jq -S . <<<"$LSP_OBJ")"
+    fi
+    [ -n "$SKIPPED" ] && { printf '  skipped / notes:\n'; printf '%b' "$SKIPPED"; }
+    printf '\n'
+fi
+
+printf 'Done. Verify in Claude Code with /hooks (hooks) and by opening a source file (LSP).\n'
+[ "$DRY_RUN" -eq 1 ] && printf '(dry-run — no files changed)\n'
+exit 0

@@ -1,0 +1,92 @@
+# Project Conventions
+
+> This file layers on top of the code4me plugin's baseline guidance. Plugin-shipped guidance (language references, the canonical workflow, the ethos) applies generically; **project-specific rules in this file authoritatively override** when the two conflict.
+>
+> Treat this file like code: review it when the agent surprises you, prune regularly, keep it under ~200 lines.
+
+## Project shape
+
+<!-- One-line stack summary. Examples:
+- "Go 1.22 microservice handling Stripe webhooks; deployed via ArgoCD to k8s; owner: #team-billing."
+- "Unity 2022.3 LTS multiplayer game; C#/.NET 4.x scripting; PlayFab backend; iOS/Android targets."
+- "Next.js 14 app router; Postgres via Drizzle; Vercel deployment; team of 3." -->
+
+PLACEHOLDER — describe the stack, deployment, owners.
+
+## Run / Build / Test
+
+<!-- The bash commands an agent should know. Single-test runners are particularly valuable. -->
+
+- `make dev` — start the dev environment
+- `make test` — run unit tests
+- `make test-integration` — run integration tests (requires X)
+- `make lint` — run linters; must pass before commit
+- Single test: `<command>` — invoke a single test by name
+
+## Layout
+
+<!-- Key directories and what lives in each. Don't enumerate every folder — list the load-bearing ones plus any with non-obvious purpose. -->
+
+- `<dir>/` — purpose; do most work here
+- `<dir>/generated/` — generated code; never hand-edit
+- `<dir>/scripts/` — operator scripts; not production code
+
+## Conventions
+
+<!-- Project-specific rules that aren't enforced by linters. Be specific. -->
+
+- Errors: prefer `<pattern>`; avoid `<antipattern>`
+- Logging: structured (`<library>`); never `println`/`fmt.Println`/`console.log`
+- Tests: table-driven style; canonical example at `<path>`
+- HTTP/RPC handlers: `<return shape>`
+- Async / concurrency: `<pattern preference>`
+
+## Boundaries
+
+<!-- Never-edit paths, scope limits, dependency policies. -->
+
+- Never edit `<path>` (auto-generated)
+- Adding a new dependency requires `<process>`
+- Don't modify `<surface>` without coordinating with `<owner>`
+
+## Gotchas
+
+<!-- The surprising things — environment quirks, hidden coupling, "this caught me." -->
+
+- `<surprising thing about the environment>`
+- `<hidden coupling between modules>`
+- `<test fixture or env var that's mandatory but easy to miss>`
+
+## Available MCPs
+
+<!-- Declared MCPs and when each subagent should prefer them.
+     If you ran /code4me-init with the recommended MCP starter, list what's there.
+     Document preferences per subagent — the orchestrator's Context Pack reminds subagents
+     to prefer MCPs over Read/Grep when an MCP serves the task. -->
+
+- **`<mcp-name>`** — `<purpose>`. Subagents should prefer this MCP for `<query type>`.
+
+## Multi-language layout (delete if single-language)
+
+<!-- If this is a heterogeneous project, layer additional CLAUDE.md files under
+     language-specific directories. The plugin's language references provide the
+     baseline; per-language CLAUDE.md adds project-specific overlay. -->
+
+```
+your-project/
+├── CLAUDE.md            # this file — common conventions
+├── src/
+│   ├── csharp/CLAUDE.md # C# specifics: your DI, Unity quirks, naming exceptions
+│   ├── swift/CLAUDE.md  # Swift specifics: your SwiftUI patterns
+│   ├── cpp/CLAUDE.md    # C++ specifics: standard version, exception policy
+│   └── python/CLAUDE.md # Python specifics: framework choice, type-strictness
+```
+
+## Cross-vendor pairing (code4me v0.7+)
+
+<!-- If you want cross-vendor pairing on by default for this project, declare it here.
+     Otherwise, enable per-milestone at intake time. -->
+
+- **Default**: single-vendor (Claude). Cross-vendor is opt-in per milestone.
+- **Enabling at intake**: state "enable cross-vendor pairing" or "use the alternation policy" in your milestone description; the orchestrator will apply `references/cross-vendor-policy.md`.
+- **Setup**: see README "External agents (Codex)" — requires `codex` CLI on PATH and `OPENAI_API_KEY` configured.

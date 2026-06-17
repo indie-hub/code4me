@@ -1,0 +1,816 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Code4Me v0.7 — Improvements &amp; Cross-Vendor Extension Plan</title>
+<style>
+  :root {
+    --bg: #fbfaf7;
+    --fg: #1c1b1a;
+    --muted: #6b665f;
+    --accent: #b8552c;
+    --accent-soft: #f1e0d3;
+    --rule: #d9d3c8;
+    --code-bg: #f3efe7;
+    --callout-bg: #fff7ed;
+    --callout-rule: #e2a36a;
+    --vendor-claude: #5b3a87;
+    --vendor-claude-soft: #ece4f5;
+    --vendor-codex: #2f6b5e;
+    --vendor-codex-soft: #d9ecdf;
+    --maxw: 860px;
+  }
+  * { box-sizing: border-box; }
+  html { font-size: 17px; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: Charter, "Iowan Old Style", Cambria, Georgia, serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 56px 28px 96px; }
+  header.hero { margin-bottom: 40px; padding-bottom: 28px; border-bottom: 1px solid var(--rule); }
+  .eyebrow { color: var(--accent); font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.75rem; letter-spacing: 0.18em; text-transform: uppercase; margin: 0 0 14px; font-weight: 600; }
+  h1 { font-family: "Iowan Old Style", Charter, Cambria, Georgia, serif; font-size: 2.2rem; line-height: 1.15; margin: 0 0 18px; font-weight: 600; letter-spacing: -0.01em; }
+  .lede { font-size: 1.1rem; color: var(--fg); margin: 0; }
+  .meta { color: var(--muted); font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.85rem; margin-top: 22px; }
+  h2 { font-family: "Iowan Old Style", Charter, Cambria, Georgia, serif; font-size: 1.55rem; margin: 56px 0 8px; line-height: 1.2; font-weight: 600; letter-spacing: -0.005em; }
+  h2 .num { color: var(--accent); margin-right: 12px; font-feature-settings: "tnum"; }
+  h3 { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 1.08rem; margin: 32px 0 6px; font-weight: 600; letter-spacing: 0; }
+  h4 { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.92rem; margin: 22px 0 6px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  p { margin: 0 0 14px; }
+  a { color: var(--accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:hover { background: var(--accent-soft); }
+  ul, ol { margin: 0 0 16px; padding-left: 22px; }
+  li { margin-bottom: 6px; }
+  code, pre { font-family: "JetBrains Mono", Menlo, Consolas, monospace; font-size: 0.85em; }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 3px; }
+  pre { background: var(--code-bg); padding: 16px 18px; border-radius: 6px; overflow-x: auto; line-height: 1.5; margin: 16px 0; font-size: 0.82rem; }
+  pre code { background: none; padding: 0; }
+  .callout { border-left: 3px solid var(--callout-rule); background: var(--callout-bg); padding: 14px 18px; margin: 20px 0; border-radius: 0 4px 4px 0; }
+  .callout h4 { margin-top: 0; color: var(--accent); text-transform: none; letter-spacing: 0; font-size: 0.95rem; }
+  .callout p:last-child { margin-bottom: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 18px 0; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  .toc { background: #fff; border: 1px solid var(--rule); padding: 22px 26px; border-radius: 4px; margin: 28px 0 0; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.92rem; }
+  .toc h4 { margin: 0 0 12px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.78rem; }
+  .toc ol { padding-left: 22px; margin: 0; }
+  .toc li { margin-bottom: 4px; }
+  .toc a { text-decoration: none; color: var(--fg); }
+  .toc a:hover { color: var(--accent); }
+  .item {
+    display: flex;
+    gap: 18px;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--rule);
+    align-items: baseline;
+  }
+  .item:last-child { border-bottom: none; }
+  .item .label {
+    color: var(--accent);
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-weight: 600;
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    width: 92px;
+    padding-top: 2px;
+  }
+  .item .body p { margin-bottom: 8px; }
+  .item .body p:last-child { margin-bottom: 0; }
+  .priority {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .priority.p1 { background: #fbe1e1; color: #a32020; }
+  .priority.p2 { background: #fdf0d0; color: #8a5a00; }
+  .priority.p3 { background: #e3ecf7; color: #2a5b9c; }
+  .vendor-claude { color: var(--vendor-claude); font-weight: 600; }
+  .vendor-codex { color: var(--vendor-codex); font-weight: 600; }
+  .vendor-tag {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .vendor-tag.claude { background: var(--vendor-claude-soft); color: var(--vendor-claude); }
+  .vendor-tag.codex { background: var(--vendor-codex-soft); color: var(--vendor-codex); }
+  .pairing-table th { background: #fff; }
+  .pairing-table td.claude { background: var(--vendor-claude-soft); color: var(--vendor-claude); font-family: ui-sans-serif, system-ui, sans-serif; font-weight: 600; font-size: 0.85rem; }
+  .pairing-table td.codex { background: var(--vendor-codex-soft); color: var(--vendor-codex); font-family: ui-sans-serif, system-ui, sans-serif; font-weight: 600; font-size: 0.85rem; }
+  hr.section { border: none; border-top: 1px solid var(--rule); margin: 56px 0 0; }
+  .phase {
+    border: 1px solid var(--rule);
+    background: #fff;
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 14px 0;
+  }
+  .phase h4 { margin-top: 0; color: var(--accent); text-transform: none; letter-spacing: 0; font-size: 0.98rem; }
+  .phase ul { margin: 8px 0 0; }
+  .footer { margin-top: 64px; padding-top: 28px; border-top: 1px solid var(--rule); color: var(--muted); font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.85rem; }
+  @media (max-width: 640px) {
+    .item { flex-direction: column; gap: 4px; }
+    .item .label { width: auto; }
+    h1 { font-size: 1.85rem; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Code4Me &middot; v0.7 Plan</p>
+  <h1>Improvements &amp; Cross-Vendor Team Extension</h1>
+  <p class="lede">Concrete recommendations for code4me v0.7, plus a detailed plan to extend the Codex shim coverage so every producer can be cross-checked by a different-vendor verifier — and vice versa.</p>
+  <p class="meta">Prepared May 2026 &middot; Companion to the Agentic SDLC Field Guide.</p>
+
+  <nav class="toc">
+    <h4>Contents</h4>
+    <ol>
+      <li><a href="#recap">Where v0.6 stands</a></li>
+      <li><a href="#improvements">Part 1 — Improvements (six categories)</a></li>
+      <li><a href="#crossvendor">Part 2 — Cross-vendor team extension</a></li>
+      <li><a href="#sequencing">Recommended sequencing (v0.7 → v0.8 → v0.9)</a></li>
+      <li><a href="#not-doing">What I'd explicitly not do</a></li>
+    </ol>
+  </nav>
+</header>
+
+<section id="recap">
+  <h2><span class="num">00</span>Where v0.6 stands</h2>
+  <p>v0.6.1 is a complete, end-to-end implementable framework. Conversation, Light, Standard, and Critical workflows are wired. The orchestrator contract is slim and stable; the playbook holds elaboration; references load on demand. Declarative <code>context_queries:</code> per agent drive context-pack assembly. The Codex shims (<code>codex-architect</code>, <code>codex-developer</code>) cover the architect-pair and one developer role. PreToolUse hooks enforce protected tests and Conversation-Mode forbidden conditions at runtime. The probe suite exercises classification, team composition, auto-escalation, and the external-agent path.</p>
+  <p>The roadmap item that matters most — <em>live-test Light, Standard, and Critical end-to-end against real tasks</em> — is also the one this document doesn't try to replace. Everything below is structural; the empirical validation has to happen against real work.</p>
+  <p>What this plan adds: <strong>ergonomics, observability, documentation, and a coherent vendor-pairing policy</strong> so the cross-vendor dialectic the framework already runs at the architect tier extends to every producer/verifier boundary that benefits from it.</p>
+</section>
+
+<hr class="section">
+
+<section id="improvements">
+  <h2><span class="num">01</span>Part 1 — Improvements</h2>
+  <p>Six categories, each with concrete actions and a rough priority (<span class="priority p1">P1</span> = ship in v0.7 alongside live-testing; <span class="priority p2">P2</span> = v0.7 if time, otherwise v0.8; <span class="priority p3">P3</span> = nice to have).</p>
+
+  <h3>Category A — Ergonomics</h3>
+
+  <div class="item">
+    <div class="label">A1 <span class="priority p1">P1</span></div>
+    <div class="body">
+      <p><strong>Add explicit slash commands.</strong> Right now invocation is entirely natural-language-trigger driven via the SKILL.md description. That has zero setup friction but no muscle memory and no audit handle. Add commands that wrap the most common operations:</p>
+      <ul>
+        <li><code>/code4me-classify &lt;task description&gt;</code> — runs intake + classification only, returns weight + auto-escalation + suggested team without dispatching</li>
+        <li><code>/code4me-dispatch &lt;weight&gt; &lt;task&gt;</code> — bypasses intake, declares the weight explicitly; auto-escalation still applies</li>
+        <li><code>/code4me-status [milestone_id]</code> — read-only status snapshot of <code>.code4me/</code></li>
+        <li><code>/code4me-promote-or-revert &lt;task_id&gt;</code> — closes the Conversation-Mode loop</li>
+        <li><code>/code4me-probe-run [subdir]</code> — runs the probe suite programmatically (see B1)</li>
+        <li><code>/code4me-audit [--since=YYYY-MM-DD]</code> — wraps <code>bin/code4me-audit-dispatch-log</code></li>
+      </ul>
+      <p>Each command is a thin file under <code>commands/</code> in the plugin; the natural-language trigger continues to work alongside. The win is explicit invocation, discoverable autocomplete, and a place to hang programmatic operations (probes, audits) that don't fit the SKILL.md trigger shape.</p>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="label">A2 <span class="priority p1">P1</span></div>
+    <div class="body">
+      <p><strong>Ship a <code>/code4me-init</code> command and starter templates.</strong> The <code>.code4me-skeleton/</code> handles runtime artifacts but the <em>first-project</em> setup still requires manual work — project <code>CLAUDE.md</code>, <code>.mcp.json</code>, <code>.claude/settings.json</code> with hooks pre-wired. Add:</p>
+      <ul>
+        <li><code>templates/CLAUDE.md.example</code> — annotated starter with the multi-language hierarchy you already document</li>
+        <li><code>templates/.mcp-recommended.json</code> — opinionated starter (sequential-thinking, GitHub, Playwright, filesystem) with comments per entry</li>
+        <li><code>templates/.claude/settings.json.example</code> — hooks pre-wired with the absolute-path placeholder</li>
+        <li><code>/code4me-init</code> — copies the templates, substitutes the plugin path, leaves placeholders where the user must edit</li>
+      </ul>
+      <p>The README correctly explains <em>why</em> the plugin ships zero MCPs (project-shape, not plugin-shape). The starter template doesn't violate that — it's a recommendation file, not a configuration, and users edit it.</p>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="label">A3 <span class="priority p2">P2</span></div>
+    <div class="body">
+      <p><strong>Move trigger phrases out of the SKILL.md description.</strong> The description string in <code>skills/code4me/SKILL.md</code> currently carries ~500 characters of trigger phrases. That string is loaded on every Claude Code session as part of skill discovery. The triggers are <em>exactly</em> what the model uses to decide whether to activate the skill, so this is a real trade-off, not pure waste. Action: run <code>skill-creator</code>'s <code>improve_description.py</code> against a set of probe-style activation prompts; if shorter description maintains activation precision, ship the shorter one and move the long trigger list to <code>references/triggers.md</code>. Measure before changing.</p>
+    </div>
+  </div>
+
+  <h3>Category B — Observability &amp; evals</h3>
+
+  <div class="item">
+    <div class="label">B1 <span class="priority p1">P1</span></div>
+    <div class="body">
+      <p><strong>Make probes programmatic.</strong> Paste-and-eye-compare works for one author; it doesn't scale to "did the v0.7 prompts move anything." Build a probe runner that:</p>
+      <ul>
+        <li>Reads each <code>probes/**/*.md</code>, parses the <code>Input prompt</code> and <code>Expected</code> blocks</li>
+        <li>Spins up a fresh Claude Code session via the Agent SDK or <code>claude</code> CLI in headless mode</li>
+        <li>Captures the orchestrator's transparency announcement</li>
+        <li>Runs an LLM-as-judge (Sonnet, one-shot prompt) to score match against the <code>Expected</code> block on three axes: kind, weight, team composition</li>
+        <li>Writes <code>probes/results-{YYYY-MM-DD-HHMM}.jsonl</code> with <code>{probe, pass, score, divergence_notes}</code></li>
+      </ul>
+      <p>The runner ships as <code>bin/code4me-probe-run</code> alongside <code>code4me-audit-dispatch-log</code>. Wire it to <code>/code4me-probe-run</code> from A1.</p>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="label">B2 <span class="priority p2">P2</span></div>
+    <div class="body">
+      <p><strong>Regression budget for probe runs.</strong> Once probes are programmatic, add a configurable threshold to the runner: <code>--max-flips=3</code> exits non-zero if more than three probes move from their baseline. This is the inverse of the "100% pass = evals too easy" rule — when the framework changes, a few probes <em>should</em> move; you halt the release only when too many do. The threshold lives in <code>probes/budget.toml</code> alongside the suite.</p>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="label">B3 <span class="priority p2">P2</span></div>
+    <div class="body">
+      <p><strong>Extend the dispatch-log audit with deviation-pattern detection.</strong> The current <code>code4me-audit-dispatch-log</code> summarises counts, weight distribution, vendor split, model deviation, and auto-escalation triggers. Add:</p>
+      <ul>
+        <li><strong>Deviation-pattern surfacing</strong> — when the same role+weight combination deviates from default model on more than N% of dispatches, surface as "the default may need tuning"</li>
+        <li><strong>Vendor cost rollup</strong> — sum estimated cost per vendor based on dispatched models, surface in the summary</li>
+        <li><strong>Weight × outcome heatmap</strong> — markdown table of dispatches by weight against outcome (COMPLETE / BLOCKED / FORBIDDEN / TEST_QUESTION / ARCHITECTURE_BLOCK / REWORK) so you can spot which weights are noisy</li>
+        <li><strong>Circuit-breaker firing log</strong> — sorted by milestone, with the trigger and the decision</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="label">B4 <span class="priority p3">P3</span></div>
+    <div class="body">
+      <p><strong>Trace-reading discipline as a documented practice.</strong> Hamel Husain's highest-ROI evals advice is "spend 30 minutes reading 20–50 traces every meaningful change." Add a one-page <code>docs/trace-review.md</code> with a small checklist (transparency announcement matches dispatched team? subagent return outcomes typed correctly? context queries resolved or skipped with reason? hook fire matched intent?) so the practice is named and not just implicit.</p>
+    </div>
+  </div>
+
+  <h3>Category C — Documentation</h3>
+
+  <div class="item">
+    <div class="label">C1 <span class="priority p2">P2</span></div>
+    <div class="body">
+      <p><strong>Split the README into Diataxis quadrants.</strong> 430 lines of single-document reference is correct for an internal project; if you ever shop this to others it becomes the friction point. Split into:</p>
+      <ul>
+        <li><code>docs/tutorial-first-milestone.md</code> — 10-minute path from install to closing a Conversation Mode task</li>
+        <li><code>docs/howto-install-hooks.md</code>, <code>docs/howto-configure-lsp.md</code>, <code>docs/howto-add-a-language.md</code>, <code>docs/howto-enable-codex-shims.md</code></li>
+        <li><code>docs/reference-*.md</code> — the current README content, by section</li>
+        <li><code>docs/explanation-workflow-weights.md</code>, <code>docs/explanation-co-approval.md</code>, <code>docs/explanation-orchestrator-pattern.md</code> — the <em>why</em>, separated from the <em>what</em></li>
+      </ul>
+      <p>The root README becomes ~80 lines: what it is, install, link to tutorial, link to the four quadrants. gstack's README does this well.</p>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="label">C2 <span class="priority p1">P1</span></div>
+    <div class="body">
+      <p><strong>Introduce OpenWolf at the top of the README.</strong> OpenWolf is referenced throughout (<code>.wolf/cerebrum.md</code>, <code>.wolf/anatomy.md</code>, <code>.wolf/buglog.json</code>) without ever being introduced. A two-sentence intro at the top: <em>"OpenWolf is an external persistent-knowledge system this plugin integrates with when present. The plugin works fully without it; if installed, the orchestrator reads cerebrum first to avoid re-litigating decisions you've already made."</em> Outside readers currently can't parse half the references in <code>tooling.md</code> without this.</p>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="label">C3 <span class="priority p3">P3</span></div>
+    <div class="body">
+      <p><strong>Add a CONTRIBUTING-style note on probe baselines.</strong> The probes README says baselines are gitignored personal artifacts. Document explicitly: where they live, the naming convention, when to capture a new one, what counts as "intentional probe movement vs. regression." Right now this is implicit in the author's head.</p>
+    </div>
+  </div>
+
+  <h3>Category D — Architectural</h3>
+
+  <div class="item">
+    <div class="label">D1 <span class="priority p2">P2</span></div>
+    <div class="body">
+      <p><strong>Add <code>provenance</code> to the <code>context_queries</code> resolved output.</strong> When the orchestrator assembles a Context Pack, the resolution should record which artifact (filename + commit SHA when known) provided each item. The dispatch log gains <code>context_provenance: [...]</code>. This lets the audit tool answer "when this dispatch went wrong, what context was in the pack?" without re-running the workflow. Inexpensive; high diagnostic value.</p>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="label">D2 <span class="priority p2">P2</span></div>
+    <div class="body">
+      <p><strong>Drop the v0.5 fallback path.</strong> The playbook already calls this out as a v0.7 deprecation. By v0.7 every shipped agent declares <code>context_queries:</code>, so the fallback can go. Removes the conditional branch in the dispatch protocol and simplifies the contract.</p>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="label">D3 <span class="priority p3">P3</span></div>
+    <div class="body">
+      <p><strong>AGENTS.md emission.</strong> The plugin's content (conventions, tooling preferences, language guidance) is portable in principle. A small emitter that flattens the relevant plugin guidance into a project-root <code>AGENTS.md</code> at <code>/code4me-init</code> time would let Codex CLI, Gemini CLI, Aider, Continue, etc. read the same conventions when working alongside Claude Code. Low priority and the right choice <em>only</em> if you actually run multi-agent setups; otherwise the duplication isn't worth it.</p>
+    </div>
+  </div>
+
+  <h3>Category E — Workflow extensions</h3>
+
+  <div class="item">
+    <div class="label">E1 <span class="priority p2">P2</span></div>
+    <div class="body">
+      <p><strong>Spec Kit interop.</strong> If a project has used GitHub's Spec Kit to produce a <code>spec.md</code> and <code>plan.md</code>, the orchestrator should accept those as inputs equivalent to a Milestone Spec + Tech Spec. Concretely: at intake, check for <code>specs/&lt;feature&gt;/spec.md</code> and <code>specs/&lt;feature&gt;/plan.md</code>; if present, skip Product Coach / Lead Architect for the parts already covered, and dispatch Challenger Architect (or codex-architect) for the soundness review instead. Keeps Spec Kit's strong upstream artifact pipeline; code4me handles execution.</p>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="label">E2 <span class="priority p3">P3</span></div>
+    <div class="body">
+      <p><strong>Playwright MCP as a recommended verifier tool.</strong> Visual verification is one of the highest-ROI additions for any UI-touching work — 60%+ debugging time reduction per the field guide's research. Add Playwright MCP to the recommended starter <code>.mcp.json</code> (A2), and add a Verification-subagent directive: when the milestone touches files under known UI paths, run the smoke check through Playwright if available, capture a screenshot to <code>.code4me/screenshots/</code>, and reference it in the verification report.</p>
+    </div>
+  </div>
+
+  <h3>Category F — Test &amp; safety hardening</h3>
+
+  <div class="item">
+    <div class="label">F1 <span class="priority p2">P2</span></div>
+    <div class="body">
+      <p><strong>A third hook: write-allowlist for Critical work.</strong> The two existing hooks ask-gate on protected tests and forbidden conditions. A third, <code>check-critical-write-allowlist.sh</code>, would ask-gate any <code>Write</code>/<code>Edit</code> to paths not in <code>.code4me/critical-allowlist.txt</code> when a Critical milestone is active. The orchestrator writes the allowlist at Critical-mode dispatch; it deletes at task close. This is the same defense-in-depth pattern as the existing two, scoped to the highest-risk weight tier where blast radius is a real concern.</p>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="label">F2 <span class="priority p3">P3</span></div>
+    <div class="body">
+      <p><strong>"Sanity probes" for production agents.</strong> Distinct from the regression probes: a small set of probes that runs <em>before</em> a Critical dispatch and confirms the framework is in a sane state — <code>.code4me/</code> exists, hooks are installed, dispatch-log is writable, LSP is reachable for project file types, Codex CLI is present if codex-* shims are in the team. Run automatically by the orchestrator; fail fast with a clear pre-flight error.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="section">
+
+<section id="crossvendor">
+  <h2><span class="num">02</span>Part 2 — Cross-vendor team extension</h2>
+
+  <p>Today, the cross-vendor dialectic exists at one boundary: Lead Architect (Claude) vs. Challenger Architect (Codex). The Co-Approval Rule forces both to return <code>approved: true</code>. That's the most valuable application of multi-vendor — same-vendor architects can converge on similar blind spots, so a different distribution genuinely catches different things.</p>
+
+  <p>Your request: extend the principle. <strong>One vendor produces, the other vendor verifies — and vice versa.</strong> The framework should treat producer/verifier pairs the same way it treats Lead/Challenger pairs: by default, run them on different vendors when both shims exist.</p>
+
+  <p>This section specifies the pairing principle, which roles need new shims, the dispatch policy, schema changes, a worked example, cost and failure-mode posture, and the probes that should verify the alternation fires correctly.</p>
+
+  <h3>The alternation rule</h3>
+
+  <div class="callout">
+    <h4>The cross-vendor alternation rule</h4>
+    <p>When both vendors have shims for a producer-verifier pair, the orchestrator dispatches them on opposite vendors by default. The pairing is computed at team composition time, recorded in the dispatch log under <code>vendor_pairing</code>, and surfaced in the Team Transparency announcement.</p>
+    <p>Cross-vendor pairing is <strong>opt-in per milestone</strong>, like the existing Codex shims. A user enables it at intake (or via <code>/code4me-dispatch --cross-vendor</code>); the orchestrator otherwise sticks with Claude-on-both-sides. Auto-escalated work to Critical retains the user's existing cross-vendor preference rather than forcing it on.</p>
+  </div>
+
+  <h3>Producer / verifier graph (what pairs with what)</h3>
+
+  <p>Every role in code4me either produces an artifact, verifies one, or both. The cross-vendor question is which boundaries gain enough value from a different-distribution verifier to justify the shim and the dispatch cost.</p>
+
+  <table>
+    <thead><tr><th>Producer</th><th>Artifact produced</th><th>Verifier(s)</th><th>Cross-vendor value</th></tr></thead>
+    <tbody>
+      <tr><td>lead-architect</td><td>Tech Spec, Execution Dependency Plan</td><td>challenger-architect (Co-Approval Rule)</td><td>Already implemented (codex-architect)</td></tr>
+      <tr><td>spec-to-test</td><td>Test Spec, protected tests</td><td>developer must satisfy; Verification confirms suite passes</td><td><strong>High</strong> — test shape is exactly where vendor bias surfaces</td></tr>
+      <tr><td>developer</td><td>Implementation, technical docs</td><td>verification, code-reviewer, qa</td><td><strong>High</strong> — the canonical "one codes, the other reviews" boundary</td></tr>
+      <tr><td>codex-developer</td><td>Implementation (when Codex is the producer)</td><td>verification, code-reviewer, qa</td><td><strong>High</strong> — symmetric inverse of above</td></tr>
+      <tr><td>combined-reviewer</td><td>Combined-pass review (Conversation/Light)</td><td>—</td><td>Low — Conversation/Light is supposed to be cheap</td></tr>
+      <tr><td>qa</td><td>Bug-fix repro, exploratory test report</td><td>—</td><td>Medium — creativity is high; vendor diversity helps but isn't the strongest leverage</td></tr>
+      <tr><td>security-reviewer</td><td>OWASP/STRIDE finding set</td><td>— (auto-fires on escalation)</td><td><strong>High</strong> — different training distributions catch different OWASP categories</td></tr>
+      <tr><td>doc-writer</td><td>User-facing docs</td><td>—</td><td>Low — docs accuracy is verified by the reader, not by another vendor</td></tr>
+      <tr><td>researcher</td><td>Desk-research synthesis</td><td>—</td><td>Medium — different vendors have different training cutoffs and source coverage</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Which shims to add</h3>
+
+  <p>Three tiers based on the value column above.</p>
+
+  <h4>Tier 1 — High value, add in v0.7</h4>
+
+  <ul>
+    <li><strong><code>codex-code-reviewer</code></strong> — shim of <code>code-reviewer</code> (Standard quality review). Modes: <code>review-diff</code> (default), <code>review-files</code>, <code>review-spec-fit</code>. This is the linchpin of "Claude implements, Codex reviews" and "Codex implements, Claude reviews."</li>
+    <li><strong><code>codex-spec-to-test</code></strong> — shim of <code>spec-to-test</code>. Modes: <code>generate</code> (default — Test Spec + protected tests from a Tech Spec), <code>review-test-spec</code> (read-only soundness pass). Critical because the developer implementing against a same-vendor Test Spec can unconsciously match the test shape; a different-vendor Test Spec breaks that loop.</li>
+    <li><strong><code>codex-security-reviewer</code></strong> — shim of <code>security-reviewer</code>. Modes: <code>diff-focused</code> (default), <code>comprehensive</code>. Fires on the same auto-escalation symptom classes. Security is where cross-vendor pays off most because OWASP categories are known to have model-dependent recall.</li>
+  </ul>
+
+  <h4>Tier 2 — Useful, add in v0.8</h4>
+
+  <ul>
+    <li><strong><code>codex-verification</code></strong> — shim of <code>verification</code>. Modes: <code>suite-run</code> (default — run the full suite, report results), <code>ac-coverage</code> (acceptance-criteria coverage assessment against the Tech Spec). The shim's value is checking that suite-passing means the same thing across vendors; the Claude-side may have produced the implementation, so a Codex-side verifier closes the loop.</li>
+    <li><strong><code>codex-lead-architect</code></strong> — shim of <code>lead-architect</code>. Modes: <code>propose</code> (default — produce Tech Spec + EDP), <code>amend</code>. Adding this lets you invert the architect pairing: Codex-Lead / Claude-Challenger. Useful when you want the Codex perspective to drive a milestone and Claude to pressure-test.</li>
+  </ul>
+
+  <h4>Tier 3 — Defer or skip</h4>
+
+  <ul>
+    <li><strong><code>codex-qa</code></strong> — defer to v0.9. QA's value is exploratory creativity; vendor diversity helps but the Claude QA is already capable. Reassess after live-testing.</li>
+    <li><strong><code>codex-researcher</code></strong> — defer. Different vendors having different sources is real value, but it's a different shape of use (you'd want to dispatch <em>both</em> as parallel researchers and merge, not alternate them).</li>
+    <li><strong><code>codex-combined-reviewer</code></strong> — skip. Conversation/Light is meant to be cheap; cross-vendor here erodes the cost advantage that defines those weights.</li>
+    <li><strong><code>codex-doc-writer</code>, <code>codex-product-coach</code></strong> — skip. Low blast radius, low cross-vendor value.</li>
+  </ul>
+
+  <h3>The vendor-pairing policy</h3>
+
+  <p>A new <code>references/cross-vendor-policy.md</code> codifies the rules. The orchestrator reads it at team composition time, after team-templates but before the first dispatch.</p>
+
+<pre><code># cross-vendor-policy.md  (excerpt)
+
+## Alternation rule
+
+When cross-vendor pairing is enabled for the milestone AND both shims
+exist for a producer/verifier pair, dispatch them on opposite vendors.
+
+## Pair definitions (producer → verifier)
+
+- lead-architect ↔ challenger-architect    (Co-Approval; existing)
+- spec-to-test   → developer                (test author ≠ implementer)
+- developer      → code-reviewer            (implementer ≠ reviewer)
+- developer      → verification             (implementer ≠ verifier)
+- developer      → security-reviewer        (Critical / auto-escalated only)
+
+## Resolution algorithm
+
+1. If cross-vendor is OFF: every role defaults to Claude. Done.
+2. If ON:
+   a. Pick the Producer's vendor (default: Claude unless cerebrum or user
+      override says otherwise for this milestone).
+   b. For each pair the Producer participates in, set the Verifier's
+      vendor to the opposite.
+   c. If a transitive conflict arises (rare — e.g., spec-to-test producer
+      is on vendor X, developer is on opposite Y, but code-reviewer needs
+      to be opposite of developer = X, and X is also Test author of the
+      tests the developer just satisfied), prefer the Producer↔Verifier
+      pairing closest to the artifact under review.
+   d. If a required shim is unavailable (CLI missing, key missing,
+      vendor opted out), fall back to Claude-on-both-sides and record
+      pairing_degraded with the reason.
+
+## Recording
+
+Every dispatch log entry gains:
+- vendor_pairing.policy: "alternation" | "single-vendor" | "user-override"
+- vendor_pairing.pair_role: which pair this dispatch fulfilled
+- vendor_pairing.degraded: optional reason if fallback applied
+</code></pre>
+
+  <h3>Vendor-aware model tiers</h3>
+
+  <p>The orchestrator currently picks Claude models per dispatch from a weight-tier heuristic — Haiku for mechanical work, Sonnet for default reasoning, Opus for architects and Critical. For Codex it has only a single user-configured default that the shim passes as <code>--model</code>. That's the gap: at v0.6 the orchestrator can't choose between GPT-5.4-mini, GPT-5.4, and GPT-5.5 the way it chooses between Haiku, Sonnet, and Opus.</p>
+
+  <p>The fix is to make model selection <strong>vendor-aware via a tier abstraction</strong>. The orchestrator picks a <em>tier</em> per (subagent, weight); the tier resolves to a concrete model identifier based on the vendor the pairing layer assigned. Same heuristic for both vendors; different concrete models.</p>
+
+  <h4>The three tiers</h4>
+
+  <table>
+    <thead><tr><th>Tier</th><th>Use</th><th>Claude</th><th>Codex (OpenAI)</th></tr></thead>
+    <tbody>
+      <tr><td><code>low</code></td><td>mechanical work, fast iteration, parallel ops</td><td>Haiku 4.5</td><td>GPT-5.4-mini</td></tr>
+      <tr><td><code>mid</code></td><td>default reasoning, most workflows</td><td>Sonnet 4.6</td><td>GPT-5.4</td></tr>
+      <tr><td><code>high</code></td><td>architecture, Critical Mode, deep reasoning</td><td>Opus 4.6/4.7</td><td>GPT-5.5 (or <code>gpt-5.3-codex</code> for code-heavy work)</td></tr>
+    </tbody>
+  </table>
+
+  <p>Concrete model identifiers live in a single config file. The framework references <em>tiers</em>; users override the resolution per project without touching plugin code or agent files. When OpenAI or Anthropic ship a new model in a tier, you edit one line.</p>
+
+  <h4>Two new config files</h4>
+
+  <p>The first is the vendor → tier → model map. Ships with sensible defaults; project-local overrides at <code>.code4me/vendor-models.local.yaml</code> win when present.</p>
+
+<pre><code># references/vendor-models.yaml
+
+anthropic:
+  low:  claude-haiku-4-5-20251001
+  mid:  claude-sonnet-4-6
+  high: claude-opus-4-6
+
+openai:
+  low:  gpt-5.4-mini
+  mid:  gpt-5.4
+  high: gpt-5.5
+  # alternate "high" for code-heavy work — opt in per-role if desired:
+  # high_code: gpt-5.3-codex
+</code></pre>
+
+  <p>The second extracts the per-(subagent, weight) tier defaults from the current prose in <code>references/model-selection.md</code> into a structured form the orchestrator can evaluate without parsing English.</p>
+
+<pre><code># references/model-selection.yaml  (extracted from existing prose)
+
+defaults:
+  lead-architect:        { standard: high, critical: high }
+  challenger-architect:  { standard: high, critical: high }
+  spec-to-test:          { standard: mid,  critical: mid  }
+  developer:             { conversation: low, light: mid, standard: mid, critical: high }
+  verification:          { standard: mid,  critical: mid  }
+  code-reviewer:         { standard: mid,  critical: high }
+  combined-reviewer:     { conversation: low, light: mid }
+  qa:                    { standard: mid,  critical: mid  }
+  security-reviewer:     { standard: mid,  critical: high }
+  doc-writer:            { standard: low,  critical: mid  }
+  researcher:            { any: mid }
+  product-coach:         { any: mid }
+
+hard_floors:
+  - "architect roles never run at tier 'low'"
+  - "Critical Mode never runs at tier 'low'"
+  - "auto-escalated work: tier never downgraded below resolved value"
+  - "cross-vendor pairing does not relax tier floors —
+     a Codex developer at Critical is still tier 'high'"
+</code></pre>
+
+  <h4>Resolution algorithm</h4>
+
+  <p>At dispatch time the orchestrator runs:</p>
+
+<pre><code>def resolve_model(role, weight, vendor, mode_context):
+    # 1. Look up tier from the structured defaults
+    tier = model_selection.defaults[role].get(weight) \
+        or model_selection.defaults[role].get("any")
+
+    # 2. Apply hard floors (may upgrade tier)
+    tier = apply_hard_floors(role, weight, tier, mode_context)
+
+    # 3. Apply deviation rules — complexity surprise, mid-flight escalation,
+    #    previous failed dispatch at this default
+    tier = apply_deviation_rules(role, weight, tier, mode_context)
+
+    # 4. Resolve to concrete model for the chosen vendor
+    return vendor_models[vendor][tier]
+</code></pre>
+
+  <p>The hard floors are the same vendor-agnostic statements the framework already enforces — they're just expressed in tier vocabulary now instead of being tied to "never Haiku" or "never below Sonnet."</p>
+
+  <h4>Deviation rules (vendor-agnostic)</h4>
+
+  <p>Same three deviation rules from <code>model-selection.md</code> apply per vendor:</p>
+
+  <ul>
+    <li><strong>Bump tier up</strong> when complexity surprises you, when stakes change mid-flight, or when a previous dispatch at the default failed.</li>
+    <li><strong>Record deviations</strong> in the dispatch log as <code>tier_deviated_from_default: true</code> with <code>default_tier</code> and <code>actual_tier</code>. Persistent deviation patterns are signal that the defaults table needs tuning.</li>
+    <li><strong>Never downgrade</strong> below hard floors regardless of vendor.</li>
+  </ul>
+
+  <h4>Transparency announcement (updated format)</h4>
+
+  <p>Team Transparency lines change from <code>(anthropic:opus)</code> to <code>(claude:high)</code> — vendor and tier, not vendor and concrete model. The resolved model identifier goes in the dispatch log where it's auditable; the announcement stays compact and decision-relevant.</p>
+
+  <p>Old:</p>
+<pre><code>Team for M03-T07-DEV: lead-architect (anthropic:opus),
+challenger-architect (anthropic:opus), developer (anthropic:sonnet), ...</code></pre>
+
+  <p>New:</p>
+<pre><code>Team for M07-T03-DEV (Critical, cross-vendor enabled):
+lead-architect (claude:high), codex-architect (codex:high),
+codex-spec-to-test (codex:mid), developer (claude:mid),
+codex-verification (codex:mid), codex-code-reviewer (codex:mid),
+qa (claude:mid), codex-security-reviewer (codex:high),
+doc-writer (claude:low).</code></pre>
+
+  <p>Rationale: tier carries the cost-and-capability signal humans use to sanity-check a dispatch. The exact model SHA is an audit-time concern, not a transparency-line concern.</p>
+
+  <h4>What this gives you</h4>
+
+  <ul>
+    <li><strong>Codex shims become first-class peers</strong> — picked per dispatch with the same heuristic as Claude models, not a single global default.</li>
+    <li><strong>Cost predictability across vendors</strong> — same-weight work on either vendor pulls the analogous tier; rollups by tier are directly comparable.</li>
+    <li><strong>Single point of update</strong> when models change — edit <code>vendor-models.yaml</code>, not 14 agent files.</li>
+    <li><strong>Future vendor additions</strong> (Gemini, local models, anything) require only a new column in <code>vendor-models.yaml</code>; no logic change in the orchestrator or agents.</li>
+    <li><strong>The dispatch-log analytics</strong> (B3) gain a clean (vendor × tier) grouping.</li>
+  </ul>
+
+  <h3>Schema additions</h3>
+
+  <h4>Agent frontmatter</h4>
+
+  <p>Each shimmable agent gains a <code>cross_vendor_pair_with</code> field listing the roles it should be on the opposite vendor from. The orchestrator uses this for team composition and for the transparency announcement.</p>
+
+<pre><code># agents/developer.md frontmatter (excerpt)
+
+---
+name: developer
+description: ...
+cross_vendor_pair_with:
+  - role: spec-to-test
+    relation: implements-tests-by
+  - role: code-reviewer
+    relation: reviewed-by
+  - role: verification
+    relation: verified-by
+  - role: security-reviewer
+    relation: security-reviewed-by
+    applies-when: "weight = Critical OR auto_escalation_fired"
+context_queries: [...]
+---
+</code></pre>
+
+  <h4>Dispatch contract</h4>
+
+  <p>New fields in the Task-tool dispatch contract:</p>
+
+<pre><code>{
+  ...existing fields...
+  "vendor": "anthropic" | "openai",
+  "model_tier": "low" | "mid" | "high",
+  "model": "&lt;resolved concrete model id&gt;",
+  "vendor_pairing": {
+    "policy": "alternation",
+    "pair_role": "developer→code-reviewer",
+    "alternates_with": { "role": "developer", "vendor": "anthropic" },
+    "degraded": null
+  }
+}
+</code></pre>
+
+  <p>The shim reads <code>model</code> when invoking <code>codex exec --model ID</code>; the orchestrator never hardcodes a model string — it resolves through the tier system every time.</p>
+
+  <h4>Dispatch log line</h4>
+
+  <p>The existing JSONL line gains <code>vendor_pairing</code>:</p>
+
+<pre><code>{
+  "ts": "2026-05-19T14:22:09Z",
+  "milestone": "M03",
+  "task": "M03-T07-REV",
+  "weight": "Standard",
+  "subagent": "code-reviewer",
+  "vendor": "openai",
+  "model_tier": "mid",
+  "model": "gpt-5.4",
+  "tier_deviated_from_default": false,
+  "default_tier": "mid",
+  "mode": "review-diff",
+  "outcome": "COMPLETE",
+  "escalation_trigger": null,
+  "vendor_pairing": {
+    "policy": "alternation",
+    "pair_role": "developer→code-reviewer",
+    "alternates_with": "anthropic",
+    "degraded": null
+  }
+}
+</code></pre>
+
+  <h3>Worked example — a Critical milestone with full pairing</h3>
+
+  <p>User enables cross-vendor for milestone <code>M07</code> (a payment-flow change — Critical, auto-escalation fires on "payments" symptom class).</p>
+
+  <p>The orchestrator's transparency announcement before the first dispatch:</p>
+
+  <div style="background: #fff; border-left: 3px solid var(--accent); padding: 14px 18px; margin: 16px 0; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.92rem;">
+    <p style="margin: 0 0 8px;"><strong>Team for M07-T03-DEV</strong> (Critical, cross-vendor enabled):</p>
+    <p style="margin: 0 0 6px;">
+      <span class="vendor-tag claude">claude:high</span> lead-architect &middot;
+      <span class="vendor-tag codex">codex:high</span> codex-architect (challenge mode) &middot;
+      <span class="vendor-tag codex">codex:mid</span> codex-spec-to-test &middot;
+      <span class="vendor-tag claude">claude:mid</span> developer &middot;
+      <span class="vendor-tag codex">codex:mid</span> codex-verification &middot;
+      <span class="vendor-tag codex">codex:mid</span> codex-code-reviewer &middot;
+      <span class="vendor-tag claude">claude:mid</span> qa &middot;
+      <span class="vendor-tag codex">codex:high</span> codex-security-reviewer &middot;
+      <span class="vendor-tag claude">claude:low</span> doc-writer
+    </p>
+    <p style="margin: 0;"><em>Pairing: Architect Co-Approval (Claude/Codex). Spec author (Codex) ≠ implementer (Claude). Implementer (Claude) ≠ reviewer/verifier/security (Codex). QA and docs single-vendor (no shim). Tiers resolve to claude-opus-4-6 / claude-sonnet-4-6 / claude-haiku-4-5 and gpt-5.5 / gpt-5.4 respectively. Cost: ~$X.XX est., +30% vs single-vendor baseline.</em></p>
+  </div>
+
+  <p>What this protects against, concretely:</p>
+  <ul>
+    <li>The developer (Claude) can't unconsciously match implementation to test-shape biases of the same vendor — tests come from Codex.</li>
+    <li>The reviewer (Codex) doesn't share blind spots with the implementer — different distribution for catching subtle bugs.</li>
+    <li>The security pass (Codex) sees the OWASP/STRIDE surface through different training data than the developer who wrote the auth code.</li>
+    <li>The architect pair retains its existing Co-Approval cross-vendor rule.</li>
+  </ul>
+
+  <h3>The pairing matrix at a glance</h3>
+
+  <table class="pairing-table">
+    <thead>
+      <tr><th>Role</th><th>Conversation</th><th>Light</th><th>Standard</th><th>Critical</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>lead-architect</td><td>—</td><td>(notify)</td><td class="claude">claude</td><td class="claude">claude</td></tr>
+      <tr><td>challenger-architect (codex)</td><td>—</td><td>—</td><td class="codex">codex</td><td class="codex">codex</td></tr>
+      <tr><td>spec-to-test</td><td>—</td><td>—</td><td class="codex">codex</td><td class="codex">codex</td></tr>
+      <tr><td>developer</td><td class="claude">claude</td><td class="claude">claude</td><td class="claude">claude</td><td class="claude">claude</td></tr>
+      <tr><td>verification</td><td>—</td><td>—</td><td class="codex">codex</td><td class="codex">codex</td></tr>
+      <tr><td>code-reviewer</td><td>—</td><td>—</td><td class="codex">codex</td><td class="codex">codex</td></tr>
+      <tr><td>combined-reviewer</td><td class="claude">claude</td><td class="claude">claude</td><td>—</td><td>—</td></tr>
+      <tr><td>qa</td><td>—</td><td>—</td><td class="claude">claude</td><td class="claude">claude</td></tr>
+      <tr><td>security-reviewer</td><td>—</td><td>—</td><td>(auto)</td><td class="codex">codex</td></tr>
+      <tr><td>doc-writer</td><td>—</td><td>—</td><td class="claude">claude</td><td class="claude">claude</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size: 0.85rem; color: var(--muted); margin-top: 4px;">Default pairing when cross-vendor is enabled. The "alternation" is visible: Codex on the verifier side of every Claude-produced artifact in Standard/Critical, and the architect pair maintains its existing dialectic. QA stays single-vendor by choice.</p>
+
+  <h3>Cost &amp; latency posture</h3>
+
+  <p>Cross-vendor doesn't multiply dispatch count — it splits dispatches across two providers. Total Claude API tokens drop; total Codex API tokens appear. The net cost change depends on relative pricing and the size of the role's typical context pack.</p>
+
+  <ul>
+    <li><strong>Latency:</strong> Codex shim invocation uses <code>codex exec</code> with timeouts (300s arch, 600s dev). For verifiers, set lower timeouts: 240s for code-reviewer, 180s for security-reviewer, 360s for verification (suite-run can be slow). Surface as constants in <code>references/cross-vendor-policy.md</code>.</li>
+    <li><strong>Cost:</strong> the dispatch-log audit (B3) already covers vendor cost rollup; with the pairing in place, you'll have empirical per-vendor numbers per milestone. Use the first three Critical milestones with cross-vendor on to establish a baseline.</li>
+    <li><strong>Opt-in is the default.</strong> Cross-vendor is per-milestone, not project-wide. The README must say this loudly — defaulting to cross-vendor on Critical only is a defensible alternative if you find the cost worth it.</li>
+  </ul>
+
+  <h3>Failure-mode handling</h3>
+
+  <p>The framework already handles per-shim failures (CLI missing, key missing, timeout, malformed response) via <code>BLOCKED</code> with typed <code>blocker_type</code>. The pairing layer adds three new conditions:</p>
+
+  <ul>
+    <li><strong>Producer's required verifier shim is unavailable.</strong> Action: fall back to same-vendor verifier and record <code>pairing_degraded: shim_unavailable</code>. Do not block the milestone — the verifier exists on the same vendor; the cross-vendor benefit is degraded but not lost.</li>
+    <li><strong>Pairing conflict can't be resolved.</strong> Action: prefer the closer producer-verifier pair (e.g., developer↔code-reviewer wins over spec-to-test↔developer when both compete) and record the choice. Surface in the transparency announcement.</li>
+    <li><strong>User declares "always Claude" mid-milestone.</strong> Action: honour the override for remaining dispatches; record <code>pairing_degraded: user_override</code> on each subsequent dispatch so the audit trail is clean.</li>
+  </ul>
+
+  <h3>Probes to add</h3>
+
+  <p>Five new probes under <code>probes/cross-vendor/</code> exercise the pairing logic. Each follows the existing probe shape (Input prompt → Expected transparency announcement).</p>
+
+  <ul>
+    <li><code>01-pairing-fires-on-standard.md</code> — Standard milestone with cross-vendor enabled; Expected: developer Claude, code-reviewer Codex, verification Codex, qa Claude.</li>
+    <li><code>02-pairing-disabled-keeps-single-vendor.md</code> — same Standard work without cross-vendor; Expected: all Claude.</li>
+    <li><code>03-pairing-degrades-when-shim-missing.md</code> — Standard with cross-vendor but codex-code-reviewer unavailable; Expected: pairing_degraded recorded, fall back to claude code-reviewer.</li>
+    <li><code>04-pairing-on-critical-auto-escalated.md</code> — Conversation Mode request that auto-escalates to Critical because of auth touch; Expected: cross-vendor not forced on (user hadn't enabled it), security-reviewer fires single-vendor, INSIGHT recommends enabling cross-vendor for future similar work.</li>
+    <li><code>05-spec-to-test-alternates-with-developer.md</code> — Standard with cross-vendor; Expected: codex-spec-to-test produces tests, claude developer implements (verifies the alternation is announced, not the inverse).</li>
+  </ul>
+
+  <h3>What the existing shims need (small migrations)</h3>
+
+  <p>The existing <code>codex-architect</code> and <code>codex-developer</code> shims need minor updates to participate in the pairing layer:</p>
+
+  <ul>
+    <li>Add <code>cross_vendor_pair_with</code> frontmatter (challenger pairs with lead; codex-developer participates in the same producer/verifier pairs as <code>developer</code>).</li>
+    <li>Accept the new dispatch contract fields (<code>vendor_pairing</code>) and pass them through to the structured response.</li>
+    <li>Record <code>vendor_pairing</code> in the existing return payload so the dispatch log captures it consistently.</li>
+  </ul>
+
+  <p>No behavioural change in the shims themselves — purely metadata propagation.</p>
+</section>
+
+<hr class="section">
+
+<section id="sequencing">
+  <h2><span class="num">03</span>Recommended sequencing</h2>
+
+  <p>Three phases. Each phase is independently shippable and rolls back cleanly if live-testing surfaces problems.</p>
+
+  <div class="phase">
+    <h4>v0.7 — Foundation (high-confidence ergonomics + the Tier-1 pairing)</h4>
+    <ul>
+      <li><strong>A1</strong> Slash commands (<code>/code4me-classify</code>, <code>-dispatch</code>, <code>-status</code>, <code>-init</code>, <code>-probe-run</code>, <code>-audit</code>, <code>-promote-or-revert</code>)</li>
+      <li><strong>A2</strong> Starter templates and <code>/code4me-init</code></li>
+      <li><strong>B1</strong> Programmatic probe runner</li>
+      <li><strong>C2</strong> OpenWolf one-line intro at top of README</li>
+      <li><strong>D2</strong> Drop v0.5 fallback path</li>
+      <li><strong>Tier-1 shims:</strong> <code>codex-code-reviewer</code>, <code>codex-spec-to-test</code>, <code>codex-security-reviewer</code></li>
+      <li><strong>cross-vendor-policy.md</strong> + frontmatter <code>cross_vendor_pair_with</code> on relevant agents</li>
+      <li><strong>vendor-aware model tiers</strong>: <code>references/vendor-models.yaml</code> + restructured <code>references/model-selection.yaml</code> with the <code>low</code>/<code>mid</code>/<code>high</code> abstraction; orchestrator picks Codex models per dispatch the same way it picks Claude models</li>
+      <li><strong>Dispatch contract + log changes</strong> for <code>vendor_pairing</code>, <code>model_tier</code>, and <code>tier_deviated_from_default</code></li>
+      <li><strong>Transparency announcement</strong> format updated to <code>(vendor:tier)</code></li>
+      <li><strong>Probes 01–03</strong> under <code>probes/cross-vendor/</code></li>
+      <li><strong>Live-test</strong> at least one Standard milestone end-to-end with cross-vendor enabled</li>
+    </ul>
+  </div>
+
+  <div class="phase">
+    <h4>v0.8 — Completion (Tier-2 pairing + observability depth)</h4>
+    <ul>
+      <li><strong>Tier-2 shims:</strong> <code>codex-verification</code>, <code>codex-lead-architect</code></li>
+      <li><strong>B2</strong> Regression budget on probe runs</li>
+      <li><strong>B3</strong> Dispatch-log analytics (deviation, cost rollup, weight × outcome, breaker firings)</li>
+      <li><strong>D1</strong> <code>provenance</code> in resolved context queries</li>
+      <li><strong>F1</strong> Critical-write-allowlist hook</li>
+      <li><strong>Probes 04–05</strong></li>
+      <li><strong>Live-test</strong> at least one Critical milestone end-to-end with full pairing</li>
+    </ul>
+  </div>
+
+  <div class="phase">
+    <h4>v0.9 — Polish &amp; portability</h4>
+    <ul>
+      <li><strong>A3</strong> Description rewrite (after measuring activation precision)</li>
+      <li><strong>C1</strong> Diataxis README split</li>
+      <li><strong>C3</strong> Probe-baseline note</li>
+      <li><strong>E1</strong> Spec Kit interop</li>
+      <li><strong>E2</strong> Playwright MCP recommended addition + verifier directive</li>
+      <li><strong>F2</strong> Sanity probes for pre-flight</li>
+      <li><strong>B4</strong> Trace-review discipline doc</li>
+      <li><strong>D3</strong> AGENTS.md emission (only if multi-agent setups are actually being run)</li>
+      <li><strong>Tier-3 reassessment</strong> — decide on <code>codex-qa</code> and <code>codex-researcher</code> based on observed pain</li>
+    </ul>
+  </div>
+</section>
+
+<hr class="section">
+
+<section id="not-doing">
+  <h2><span class="num">04</span>What I'd explicitly not do</h2>
+
+  <p>A short list of plausible-sounding ideas that I think would be net-negative for code4me's current shape. Worth saying explicitly because they tend to come up.</p>
+
+  <ul>
+    <li><strong>Don't ship MCPs as part of the plugin.</strong> The current posture — MCPs are project-shape, not plugin-shape — is correct. Resist drift. The starter <code>.mcp.json</code> in A2 is a recommendation file, not configuration.</li>
+    <li><strong>Don't run both vendors in parallel as verifiers.</strong> "Claude code-reviewer AND Codex code-reviewer review every diff" sounds rigorous but doubles cost without commensurate benefit. The alternation rule already provides the cross-vendor coverage; parallel verification is theatre.</li>
+    <li><strong>Don't force cross-vendor on Critical.</strong> Tempting because Critical is high-stakes, but the user's existing per-milestone opt-in posture is correct — the cost surface is real and reasonable people will opt out for some Critical work.</li>
+    <li><strong>Don't add a Gemini shim now.</strong> Codex is the second vendor because Codex CLI exists and is mature. Adding Gemini would triple the matrix and the cost without a clear value increment. Reassess in v1.0 if Gemini CLI matures meaningfully.</li>
+    <li><strong>Don't replace the natural-language SKILL.md trigger with slash-command-only invocation.</strong> Adding slash commands (A1) augments the trigger; it shouldn't supplant it. The natural-language trigger is what catches "build a feature for X" requests that the user typed without thinking about the framework. Keep both.</li>
+    <li><strong>Don't merge codex-developer's <code>review-diff</code> mode into <code>codex-code-reviewer</code>.</strong> The duplication is intentional: in <code>review-diff</code> mode, codex-developer reviews <em>as a developer would</em> (with the implementer's lens); codex-code-reviewer reviews as a code reviewer (with the quality-only lens). They're not the same review even with the same input diff.</li>
+    <li><strong>Don't add a "vibe coding" Conversation+ mode.</strong> Conversation Mode plus auto-escalation already covers the "small reversible change" case correctly. A mode that's looser than Conversation is just unprotected work.</li>
+  </ul>
+</section>
+
+<p class="footer">Companion document to <em>The Agentic SDLC Field Guide — 2026</em>. Specific to the code4me plugin at v0.6.1. Recommendations grounded in observed patterns from the field guide's source set: Fowler's harness engineering, Anthropic's effective-agents and context-engineering posts, Hamel Husain's evals discipline, the GitHub Spec Kit pattern, gstack's command surface, and the multi-vendor advisor pattern from Latent Space coverage.</p>
+
+</div>
+</body>
+</html>

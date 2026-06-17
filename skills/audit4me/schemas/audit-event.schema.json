@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Bruno/code4me-plugin/schemas/audit4me-event-v1.json",
+  "title": "audit4me event (v1)",
+  "description": "Single line of .code4me/audit4me/audit-events.jsonl — the append-only history of every (vendor × file × category × run) audit pass. Source of truth; audit-coverage.json is derivable from this stream.",
+  "type": "object",
+  "required": [
+    "ts",
+    "run_id",
+    "vendor",
+    "model",
+    "file",
+    "content_hash",
+    "category",
+    "outcome",
+    "rules_version"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC timestamp when this audit pass completed (or failed)."
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^run-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}Z-[a-z0-9]{4}$",
+      "description": "Identifier for the /audit4me-run invocation that produced this event. Format: run-{ISO8601-with-hyphens-instead-of-colons}-{4-char-random-suffix}. All events from one invocation share a run_id."
+    },
+    "vendor": {
+      "type": "string",
+      "enum": ["anthropic", "openai", "deepseek"],
+      "description": "Vendor whose model produced this audit pass."
+    },
+    "model": {
+      "type": "string",
+      "description": "Resolved model identifier (e.g., 'claude-sonnet-4-6', 'gpt-5.4', 'deepseek-v4-pro')."
+    },
+    "file": {
+      "type": "string",
+      "description": "Project-relative file path."
+    },
+    "content_hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "description": "Content hash of the file at the time of this audit pass."
+    },
+    "category": {
+      "type": "string",
+      "enum": ["bugs", "security", "performance", "maintainability", "test_gaps"],
+      "description": "Audit category for this pass."
+    },
+    "outcome": {
+      "type": "string",
+      "enum": ["completed", "skipped", "failed"],
+      "description": "completed: vendor returned a parseable response (findings may be zero). skipped: pre-checks failed (e.g., file type doesn't apply to category). failed: vendor errored or returned malformed output."
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Wall-clock duration of the audit pass in milliseconds. Present for completed and failed; omitted for skipped."
+    },
+    "findings": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of findings produced by this pass. Present for completed outcomes; omitted otherwise."
+    },
+    "tokens_in": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Prompt tokens consumed. Present when known."
+    },
+    "tokens_out": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Completion tokens generated. Present when known."
+    },
+    "cost_usd": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Estimated cost in USD for this pass, computed from tokens × per-vendor pricing."
+    },
+    "rules_version": {
+      "type": "string",
+      "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "rules_version active at the time of this pass."
+    },
+    "failure_reason": {
+      "type": "string",
+      "description": "Short failure reason when outcome=failed (e.g., 'codex_response_invalid', 'rate_limit', 'auth_error'). Omitted otherwise."
+    }
+  }
+}

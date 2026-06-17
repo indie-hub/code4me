@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Bruno/code4me-plugin/schemas/audit4me-config-v1.json",
+  "title": "audit4me configuration (v1)",
+  "description": "Per-project audit4me configuration. Lives at .code4me/audit4me-config.json. Declares which vendors are available, audit scope, category preferences, cost/time boxes, confidence thresholds, and apply-integration policy.",
+  "type": "object",
+  "required": ["$schema", "vendors_available", "default_categories", "scope", "rules_version"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "const": "audit4me-config-v1",
+      "description": "Schema version. Bumped when config shape changes incompatibly."
+    },
+    "vendors_available": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": ["anthropic", "openai", "deepseek"]
+      },
+      "description": "Vendors this project may use for auditing. The 2-vendor floor is a runtime constraint (single-vendor mode surfaces findings but cannot auto-propose fixes), not a schema constraint — single-vendor is a legal config for find-only mode."
+    },
+    "default_categories": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": ["bugs", "security", "performance", "maintainability", "test_gaps"]
+      },
+      "description": "Audit categories run by default when /audit4me-run is invoked without explicit category flags."
+    },
+    "max_files_per_run": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 50,
+      "description": "Files-box. Caps how many files are audited per run. Useful for incremental runs."
+    },
+    "max_cost_usd_per_run": {
+      "type": "number",
+      "minimum": 0,
+      "default": 5.00,
+      "description": "Cost-box. Caps USD spend per run; computed from token counts × per-vendor pricing. When hit, the run commits partial state and exits."
+    },
+    "max_runtime_per_run": {
+      "type": "string",
+      "pattern": "^[0-9]+(s|m|h)$",
+      "default": "4h",
+      "description": "Time-box. Wall-clock cap (e.g., 30m, 4h, 7200s). When hit, the run commits partial state and exits."
+    },
+    "rules_version": {
+      "type": "string",
+      "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Semver of the audit-prompts ruleset. When prompts materially change, bump this; all files become stale for re-audit."
+    },
+    "refresh_interval_days": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 90,
+      "description": "Files audited longer ago than this enter the next run's work set even if content unchanged."
+    },
+    "concurrency_cap": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 3,
+      "description": "Max number of per-file audit orchestrators dispatched in parallel. Higher caps run more files in parallel but multiply token burn rate and may hit vendor rate limits."
+    },
+    "scope": {
+      "type": "object",
+      "required": ["include"],
+      "additionalProperties": false,
+      "properties": {
+        "include": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string"},
+          "description": "Glob patterns for files in scope. Evaluated relative to project root."
+        },
+        "exclude": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "description": "Glob patterns to exclude. Applied after include."
+        }
+      }
+    },
+    "confidence_thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "propose_fix_min_severity": {
+          "type": "string",
+          "enum": ["NIT", "MINOR", "MAJOR", "CRITICAL"],
+          "default": "MAJOR",
+          "description": "Minimum severity at which a proposed fix is attached to a finding. Lower severities are surfaced for review only."
+        },
+        "propose_fix_requires_failing_test": {
+          "type": "boolean",
+          "default": true,
+          "description": "If true, the auditor must have written a failing test demonstrating the bug for a fix to be auto-proposed."
+        },
+        "propose_fix_requires_all_available_vendors_agreed": {
+          "type": "boolean",
+          "default": true,
+          "description": "If true, all vendors in vendors_available must independently flag the finding for a fix to be auto-proposed (unanimous within available vendors)."
+        }
+      }
+    },
+    "apply_integration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dispatch_mode": {
+          "type": "string",
+          "enum": ["conversation", "light", "standard"],
+          "default": "conversation",
+          "description": "Default code4me workflow weight used when /audit4me-apply <finding_id> dispatches a fix. Auto-escalation triggers may override per finding."
+        },
+        "auto_escalate_categories": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["bugs", "security", "performance", "maintainability", "test_gaps"]
+          },
+          "default": ["security"],
+          "description": "Findings in these categories dispatch as Standard (full Tech Spec + quality gates) regardless of dispatch_mode default."
+        }
+      }
+    }
+  }
+}

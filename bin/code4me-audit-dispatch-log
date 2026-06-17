@@ -1,0 +1,403 @@
+#!/usr/bin/env bash
+# code4me-audit-dispatch-log — summarise .code4me/dispatch-log.jsonl
+#
+# Reads the dispatch log written by the orchestrator at every Task-tool
+# dispatch (one JSONL line per dispatch; see SKILL.md "Artifact persistence")
+# and emits a markdown summary covering: dispatches per subagent, weight
+# distribution, vendor split, model-deviation patterns, auto-escalation
+# frequency, and outcome distribution.
+#
+# Usage:
+#   bin/code4me-audit-dispatch-log [path-to-log]
+#
+# Default log path: .code4me/dispatch-log.jsonl (relative to cwd).
+#
+# Requires: jq.
+
+set -u
+
+LOG="${1:-.code4me/dispatch-log.jsonl}"
+
+if [ ! -r "$LOG" ]; then
+    printf 'Log not found or unreadable: %s\n' "$LOG" >&2
+    exit 1
+fi
+
+if ! command -v jq >/dev/null 2>&1; then
+    printf 'jq is required for dispatch-log audit. Install jq and retry.\n' >&2
+    exit 1
+fi
+
+TOTAL=$(wc -l < "$LOG" | tr -d ' ')
+if [ "$TOTAL" -eq 0 ]; then
+    printf 'Empty dispatch log: %s\n' "$LOG" >&2
+    exit 0
+fi
+
+printf '# Dispatch log audit\n\n'
+printf '**Log:** `%s`  \n' "$LOG"
+printf '**Total dispatches:** %s  \n' "$TOTAL"
+printf '**Audit run:** %s  \n\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+distribution_table() {
+    local label="$1" jq_filter="$2"
+    printf '## %s\n\n' "$label"
+    printf '| Value | Count | %% |\n'
+    printf '|---|---:|---:|\n'
+    jq -r "$jq_filter" "$LOG" 2>/dev/null | sort | uniq -c | sort -rn | \
+        awk -v total="$TOTAL" '{
+            count = $1
+            $1 = ""
+            sub(/^ /, "")
+            printf "| %s | %d | %.1f%% |\n", $0, count, (count/total)*100
+        }'
+    printf '\n'
+}
+
+distribution_table 'Dispatches per subagent' '.subagent // "unknown"'
+distribution_table 'Weight distribution'      '.weight // "unknown"'
+
+# Trivial dispatch surveillance (v0.10.4+).
+# Trivial-classified tasks are inline orchestrator work with subagent=
+# "orchestrator-inline (trivial)". The whitelist in references/trivial-
+# classification.md is narrow by design; persistent Trivial > ~20% of all
+# dispatches signals classification drift (work that should be Conversation
+# is being absorbed by Trivial). Surface the rate explicitly.
+TRIVIAL_COUNT=$(jq -r 'select(.subagent == "orchestrator-inline (trivial)") | .subagent' "$LOG" 2>/dev/null | wc -l | tr -d ' ')
+if [ "$TRIVIAL_COUNT" -gt 0 ]; then
+    TRIVIAL_PERCENT=$(awk -v t="$TRIVIAL_COUNT" -v n="$TOTAL" 'BEGIN { printf "%.1f", (t/n)*100 }')
+    printf '## Trivial dispatch surveillance (v0.10.4+)\n\n'
+    printf 'Trivial-classified dispatches: **%s of %s** (%s%%)\n\n' "$TRIVIAL_COUNT" "$TOTAL" "$TRIVIAL_PERCENT"
+
+    # Threshold check: > 20% suggests classification drift.
+    OVER_THRESHOLD=$(awk -v t="$TRIVIAL_COUNT" -v n="$TOTAL" 'BEGIN { print (t/n > 0.20) }')
+    if [ "$OVER_THRESHOLD" = "1" ]; then
+        printf '> **⚠ Trivial rate exceeds 20%% — possible classification drift.**\n> Trivial is the narrow safety-valve for typo/version/comment/import/formatting/flag-toggle edits.\n> Persistent high Trivial rate suggests work that should be Conversation is being absorbed by Trivial,\n> OR that your workflow has a tooling gap (linter, dependency bumper, template) that should automate this work outside code4me.\n> Review recent Trivial entries against the whitelist in `references/trivial-classification.md`.\n\n'
+    fi
+
+    # Surface entries with missing justification (malformed dispatch log).
+    MISSING_JUSTIFICATION=$(jq -r 'select(.subagent == "orchestrator-inline (trivial)" and (.trivial_justification == null or .trivial_justification == "")) | .task // "(no task id)"' "$LOG" 2>/dev/null | head -5)
+    if [ -n "$MISSING_JUSTIFICATION" ]; then
+        printf '### Malformed Trivial entries (missing `trivial_justification`)\n\n'
+        printf '_These entries violate the dispatch-log contract for Trivial:_\n\n'
+        printf '%s\n' "$MISSING_JUSTIFICATION" | sed 's/^/- /'
+        printf '\n'
+    fi
+
+    # Surface entries with vague justification.
+    printf '### Recent Trivial justifications (last 10)\n\n'
+    jq -r 'select(.subagent == "orchestrator-inline (trivial)") | "- `\(.task // "(no task id)")`: \(.trivial_justification // "(missing)")"' "$LOG" 2>/dev/null | tail -10
+    printf '\n_Vague justifications ("simple change", "small refactor") indicate misclassification. Re-classify as Conversation._\n\n'
+fi
+
+# Solo execution surveillance (v0.13+).
+# Solo tasks log implementation work as subagent="orchestrator-inline (solo)"
+# and tag ALL entries of the solo task (including the retained gate dispatch)
+# with execution_mode="solo". There is no fixed "too much solo" threshold —
+# solo is explicit user choice — but the drift signature to watch is a rising
+# solo share combined with a rising gate-FAIL rate: work going solo that
+# needed a team. Malformed entries (missing solo_requested_via or
+# solo_justification) violate the dispatch-log contract.
+SOLO_INLINE_COUNT=$(jq -r 'select(.subagent == "orchestrator-inline (solo)") | .subagent' "$LOG" 2>/dev/null | wc -l | tr -d ' ')
+if [ "$SOLO_INLINE_COUNT" -gt 0 ]; then
+    SOLO_PERCENT=$(awk -v s="$SOLO_INLINE_COUNT" -v n="$TOTAL" 'BEGIN { printf "%.1f", (s/n)*100 }')
+    printf '## Solo execution surveillance (v0.13+)\n\n'
+    printf 'Solo inline-implementation entries: **%s of %s** (%s%%)\n\n' "$SOLO_INLINE_COUNT" "$TOTAL" "$SOLO_PERCENT"
+
+    # Requested-via distribution — the auditable record of the explicit-entry gate.
+    printf '### Solo entry gate (`solo_requested_via`)\n\n'
+    printf '| Requested via | Count |\n|---|---:|\n'
+    jq -r 'select(.subagent == "orchestrator-inline (solo)") | .solo_requested_via // "(missing)"' "$LOG" 2>/dev/null | \
+        sort | uniq -c | sort -rn | \
+        awk '{ count = $1; $1 = ""; sub(/^ /, ""); printf "| %s | %d |\n", $0, count }'
+    printf '\n_Every solo entry must carry `solo_requested_via` (user-keyword | flag | claude-md-default). "(missing)" rows are malformed — solo may have run without its explicit-entry gate. Investigate._\n\n'
+
+    # Gate outcomes for solo tasks — the drift signature.
+    SOLO_GATE_TOTAL=$(jq -r 'select(.execution_mode == "solo" and .subagent != "orchestrator-inline (solo)") | .subagent' "$LOG" 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$SOLO_GATE_TOTAL" -gt 0 ]; then
+        printf '### Retained-gate outcomes on solo tasks\n\n'
+        printf '| Gate subagent | Outcome | Count |\n|---|---|---:|\n'
+        jq -r 'select(.execution_mode == "solo" and .subagent != "orchestrator-inline (solo)") | "\(.subagent // "unknown")|\(.outcome // "unknown")"' "$LOG" 2>/dev/null | \
+            sort | uniq -c | sort -rn | \
+            awk -F'|' '{ split($1, a, " "); count = a[1]; sub(/^[[:space:]]*[0-9]+[[:space:]]+/, "", $1); printf "| %s | %s | %d |\n", $1, $2, count }'
+        printf '\n_Rising solo share + rising gate FAIL/REWORK rate is the drift signature: work is going solo that needed a dispatched team. Recommend dispatched mode for that class of task._\n\n'
+    else
+        printf '> **⚠ No retained-gate dispatches found for solo tasks.**\n> Every solo task must dispatch one gate (combined-reviewer or verification) with `execution_mode: "solo"`.\n> Solo entries without a matching gate dispatch violate `references/solo-mode.md`.\n\n'
+    fi
+
+    # Malformed entries (missing justification or requested-via).
+    SOLO_MALFORMED=$(jq -r 'select(.subagent == "orchestrator-inline (solo)" and ((.solo_justification == null or .solo_justification == "") or (.solo_requested_via == null or .solo_requested_via == ""))) | .task // "(no task id)"' "$LOG" 2>/dev/null | head -5)
+    if [ -n "$SOLO_MALFORMED" ]; then
+        printf '### Malformed solo entries (missing `solo_justification` or `solo_requested_via`)\n\n'
+        printf '_These entries violate the dispatch-log contract for solo:_\n\n'
+        printf '%s\n' "$SOLO_MALFORMED" | sed 's/^/- /'
+        printf '\n'
+    fi
+
+    # Recent solo justifications.
+    printf '### Recent solo justifications (last 10)\n\n'
+    jq -r 'select(.subagent == "orchestrator-inline (solo)") | "- `\(.task // "(no task id)")` [\(.solo_requested_via // "missing")]: \(.solo_justification // "(missing)")"' "$LOG" 2>/dev/null | tail -10
+    printf '\n'
+fi
+
+# LSP-first surveillance (v0.10.5+).
+# Reads .code4me/lsp-first-events.jsonl (written by check-lsp-first-on-source.sh
+# when the hook ask-gates a symbol-shaped ctx_execute / ctx_execute_file /
+# ctx_batch_execute against a source-extension declared in .lsp.json). High
+# ask-gate rate relative to dispatch volume signals that subagents are still
+# defaulting to context-mode for symbol queries — the redirect to LSP isn't
+# being internalised. >20% (events ÷ dispatches) is a drift threshold.
+LSP_EVENTS_LOG="$(dirname "$LOG")/lsp-first-events.jsonl"
+if [ -r "$LSP_EVENTS_LOG" ]; then
+    LSP_EVENT_COUNT=$(wc -l < "$LSP_EVENTS_LOG" | tr -d ' ')
+    if [ "$LSP_EVENT_COUNT" -gt 0 ]; then
+        LSP_RATIO=$(awk -v e="$LSP_EVENT_COUNT" -v n="$TOTAL" 'BEGIN { printf "%.1f", (e/n)*100 }')
+        printf '## LSP-first surveillance (v0.10.5+)\n\n'
+        printf 'Ask-gates fired by `check-lsp-first-on-source.sh`: **%s** (ratio to dispatches: %s%%)\n\n' "$LSP_EVENT_COUNT" "$LSP_RATIO"
+
+        # Threshold check: > 20% suggests subagents still default to ctx_execute
+        # for symbol queries instead of reaching for LSP.
+        OVER_LSP_THRESHOLD=$(awk -v e="$LSP_EVENT_COUNT" -v n="$TOTAL" 'BEGIN { print (e/n > 0.20) }')
+        if [ "$OVER_LSP_THRESHOLD" = "1" ]; then
+            printf '> **⚠ LSP-first ask-gate rate exceeds 20%% of dispatch volume.**\n> Subagents are still reaching for `ctx_execute` / `ctx_execute_file` to do symbol queries\n> on source files where LSP could give a structural answer in one call. Review the\n> patterns below and consider strengthening the precedence rule in\n> `references/code-consultation-precedence.md`, or tightening the toolbelt\n> scope of developer/code-reviewer/verification.\n\n'
+        fi
+
+        # Per-shape breakdown.
+        printf '### Ask-gate shape breakdown\n\n'
+        printf '| Reason | Count |\n|---|---:|\n'
+        jq -r '.reason' "$LSP_EVENTS_LOG" 2>/dev/null | sort | uniq -c | sort -rn | \
+            awk '{ count = $1; $1 = ""; sub(/^[[:space:]]+/, ""); printf "| %s | %s |\n", $0, count }'
+        printf '\n'
+
+        # Per-tool breakdown.
+        printf '### Ask-gates by tool\n\n'
+        printf '| Tool | Count |\n|---|---:|\n'
+        jq -r '.tool' "$LSP_EVENTS_LOG" 2>/dev/null | sort | uniq -c | sort -rn | \
+            awk '{ count = $1; $1 = ""; sub(/^[[:space:]]+/, ""); printf "| `%s` | %s |\n", $0, count }'
+        printf '\n'
+
+        # Recent samples (last 5).
+        printf '### Recent ask-gates (last 5)\n\n'
+        tail -5 "$LSP_EVENTS_LOG" | jq -r '"- `\(.ts)` [\(.reason)]: `\(.haystack_head // "")`"' 2>/dev/null
+        printf '\n_If many recent entries are LSP carve-outs (regex-in-comments, cross-language, fuzzy search), proceed-rate is expected and not drift. If they are symbol-shaped queries that LSP could have answered, the redirect is being bypassed and the precedence rule needs reinforcement._\n\n'
+    fi
+fi
+
+distribution_table 'Vendor split'             '.vendor // "unknown"'
+distribution_table 'Tier distribution'        '.model_tier // "unknown"'
+distribution_table 'Outcome distribution'     '.outcome // "unknown"'
+
+# Vendor × tier cost rollup.
+HAS_TIER=$(jq -r 'select(.model_tier != null) | .model_tier' "$LOG" 2>/dev/null | head -1)
+if [ -n "$HAS_TIER" ]; then
+    printf '## Vendor \xc3\x97 tier rollup\n\n'
+    printf '_Dispatch counts by (vendor, tier). Use with your billing data for cost rollups by tier — runs at the same tier should have comparable cost characteristics across vendors._\n\n'
+    printf '| Vendor | Tier | Count | %% |\n'
+    printf '|---|---|---:|---:|\n'
+    jq -r '"\(.vendor // "unknown")|\(.model_tier // "unknown")"' "$LOG" 2>/dev/null | \
+        sort | uniq -c | sort -k2 | \
+        awk -F'|' -v total="$TOTAL" '{
+            split($1, a, " ")
+            count = a[length(a) - 1]
+            vendor = a[length(a)]
+            tier = $2
+            printf "| %s | %s | %d | %.1f%% |\n", vendor, tier, count, (count/total)*100
+        }'
+    printf '\n'
+fi
+
+# Weight × outcome heatmap.
+printf '## Weight \xc3\x97 outcome\n\n'
+printf '_Cross-tab of dispatched weight against returned outcome. Persistent FAIL/REWORK clusters at a specific weight are signal that the workflow gates need tuning — or that the weight is being mis-classified at intake._\n\n'
+{
+    # Build the matrix via awk
+    jq -r '"\(.weight // "unknown")\t\(.outcome // "unknown")"' "$LOG" 2>/dev/null | \
+        awk -F'\t' '
+            { matrix[$1][$2]++; weights[$1]; outcomes[$2] }
+            END {
+                # Sort outcomes
+                n_o = 0; for (o in outcomes) ordered_outcomes[++n_o] = o
+                for (i = 1; i <= n_o; i++) for (j = i+1; j <= n_o; j++)
+                    if (ordered_outcomes[i] > ordered_outcomes[j]) {
+                        t = ordered_outcomes[i]; ordered_outcomes[i] = ordered_outcomes[j]; ordered_outcomes[j] = t
+                    }
+                # Header row
+                printf "| Weight"
+                for (i = 1; i <= n_o; i++) printf " | %s", ordered_outcomes[i]
+                printf " |\n|---"
+                for (i = 1; i <= n_o; i++) printf "|---:"
+                printf "|\n"
+                # Body
+                weight_order = "Conversation Light Standard Critical"
+                n_w = split(weight_order, w_arr, " ")
+                for (w = 1; w <= n_w; w++) {
+                    weight = w_arr[w]
+                    if (!(weight in weights)) continue
+                    printf "| %s", weight
+                    for (i = 1; i <= n_o; i++) {
+                        v = matrix[weight][ordered_outcomes[i]] + 0
+                        if (v > 0) printf " | %d", v; else printf " | "
+                    }
+                    printf " |\n"
+                }
+                # Unknown / non-standard weights
+                for (weight in weights) {
+                    seen = 0
+                    for (i = 1; i <= n_w; i++) if (w_arr[i] == weight) seen = 1
+                    if (seen) continue
+                    printf "| %s", weight
+                    for (i = 1; i <= n_o; i++) {
+                        v = matrix[weight][ordered_outcomes[i]] + 0
+                        if (v > 0) printf " | %d", v; else printf " | "
+                    }
+                    printf " |\n"
+                }
+            }
+        '
+}
+printf '\n'
+
+# Tier deviation pattern (v0.7+).
+#
+# Surface (subagent, weight) combos that persistently deviate from the
+# tier defaults in model-selection.yaml. The combo's deviation rate is
+# computed as deviated-count / total-dispatches-for-that-combo; combos
+# with rate > 50% are flagged as "default may need tuning" candidates.
+
+TIER_DEVIATED=$(jq -r 'select(.tier_deviated_from_default == true) | .subagent' "$LOG" 2>/dev/null | wc -l | tr -d ' ')
+TIER_DEV_PERCENT=$(awk -v d="$TIER_DEVIATED" -v t="$TOTAL" 'BEGIN { printf "%.1f", (d/t)*100 }')
+printf '## Tier deviation (v0.7+)\n\n'
+printf 'Deviated from default tier: **%s of %s** (%s%%)\n\n' "$TIER_DEVIATED" "$TOTAL" "$TIER_DEV_PERCENT"
+
+if [ "$TIER_DEVIATED" -gt 0 ]; then
+    printf '### Pattern detection — (subagent, weight) combos with deviation rate > 50%%\n\n'
+    printf '| Subagent | Weight | Total | Deviated | Rate | Default→Actual (most frequent) |\n'
+    printf '|---|---|---:|---:|---:|---|\n'
+    jq -r '"\(.subagent // "unknown")|\(.weight // "unknown")|\(.tier_deviated_from_default // false)|\(.default_tier // "?")|\(.model_tier // "?")"' "$LOG" 2>/dev/null | \
+        awk -F'|' '
+            {
+                combo = $1 "|" $2
+                total[combo]++
+                if ($3 == "true") {
+                    deviated[combo]++
+                    deviation_pair[combo "|" $4 "→" $5]++
+                }
+            }
+            END {
+                for (combo in deviated) {
+                    rate = deviated[combo] / total[combo] * 100
+                    if (rate <= 50) continue
+                    # Find most frequent default→actual pair for this combo
+                    max_count = 0; max_pair = ""
+                    for (key in deviation_pair) {
+                        n = split(key, parts, "|")
+                        if (parts[1] "|" parts[2] != combo) continue
+                        if (deviation_pair[key] > max_count) {
+                            max_count = deviation_pair[key]; max_pair = parts[3]
+                        }
+                    }
+                    split(combo, c, "|")
+                    printf "| %s | %s | %d | %d | %.1f%% | %s |\n", \
+                        c[1], c[2], total[combo], deviated[combo], rate, max_pair
+                }
+            }
+        ' | sort -t'|' -k6 -rn
+
+    HIGH_RATE=$(jq -r '"\(.subagent // "unknown")|\(.weight // "unknown")|\(.tier_deviated_from_default // false)"' "$LOG" 2>/dev/null | \
+        awk -F'|' '
+            { total[$1 "|" $2]++; if ($3 == "true") deviated[$1 "|" $2]++ }
+            END {
+                count = 0
+                for (combo in deviated) if (deviated[combo]/total[combo]*100 > 50) count++
+                print count
+            }')
+    if [ "$HIGH_RATE" -eq 0 ]; then
+        printf '_No (subagent, weight) combos exceed the 50%% deviation-rate threshold. Defaults look well-calibrated._\n\n'
+    else
+        printf '\n_The flagged combos above deviate from their default tier on a majority of dispatches. Consider updating `references/model-selection.yaml` to raise the default for these combos rather than deviating on every dispatch._\n\n'
+    fi
+fi
+
+# Legacy model deviation (pre-v0.7 dispatches without tier system).
+DEVIATED=$(jq -r 'select(.deviated_from_default == true) | .subagent' "$LOG" 2>/dev/null | wc -l | tr -d ' ')
+if [ "$DEVIATED" -gt 0 ]; then
+    DEV_PERCENT=$(awk -v d="$DEVIATED" -v t="$TOTAL" 'BEGIN { printf "%.1f", (d/t)*100 }')
+    printf '### Legacy model deviation (pre-v0.7 dispatches)\n\n'
+    printf 'Dispatches using the pre-tier `deviated_from_default` field: **%s of %s** (%s%%)\n\n' "$DEVIATED" "$TOTAL" "$DEV_PERCENT"
+    printf '| Subagent | Deviated→ | Count |\n'
+    printf '|---|---|---:|\n'
+    jq -r 'select(.deviated_from_default == true) | "\(.subagent // "unknown")|\(.model // "unknown")"' "$LOG" | \
+        sort | uniq -c | sort -rn | \
+        awk -F'|' '{
+            split($1, a, " ")
+            count = a[length(a) - 1]
+            subagent = a[length(a)]
+            printf "| %s | %s | %s |\n", subagent, $2, count
+        }'
+    printf '\n'
+fi
+
+# Auto-escalation summary.
+ESCALATIONS=$(jq -r 'select(.escalation_trigger != null and .escalation_trigger != "") | .escalation_trigger' "$LOG" 2>/dev/null | wc -l | tr -d ' ')
+printf '## Auto-escalations\n\n'
+printf 'Total auto-escalations: **%s** of %s dispatches\n\n' "$ESCALATIONS" "$TOTAL"
+
+if [ "$ESCALATIONS" -gt 0 ]; then
+    printf '### Triggers\n\n'
+    printf '| Symptom class | Count |\n'
+    printf '|---|---:|\n'
+    jq -r 'select(.escalation_trigger != null and .escalation_trigger != "") | .escalation_trigger' "$LOG" | \
+        sort | uniq -c | sort -rn | \
+        awk '{
+            count = $1
+            $1 = ""
+            sub(/^ /, "")
+            printf "| %s | %d |\n", $0, count
+        }'
+    printf '\n'
+fi
+
+# Cross-vendor pairing detail (v0.7+).
+#
+# When cross-vendor pairing was active, dispatch entries carry a
+# vendor_pairing block. Surface degradations and pair-role distribution
+# so the user can see how often the alternation rule fell back vs. fired
+# cleanly.
+
+PAIRINGS=$(jq -r 'select(.vendor_pairing != null) | .vendor_pairing.policy // empty' "$LOG" 2>/dev/null | wc -l | tr -d ' ')
+if [ "$PAIRINGS" -gt 0 ]; then
+    printf '## Cross-vendor pairing (v0.7+)\n\n'
+    printf 'Dispatches with `vendor_pairing` recorded: **%s of %s**\n\n' "$PAIRINGS" "$TOTAL"
+
+    DEGRADED=$(jq -r 'select(.vendor_pairing.degraded != null and .vendor_pairing.degraded != "") | .vendor_pairing.degraded' "$LOG" 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$DEGRADED" -gt 0 ]; then
+        DEG_PERCENT=$(awk -v d="$DEGRADED" -v t="$PAIRINGS" 'BEGIN { printf "%.1f", (d/t)*100 }')
+        printf '### Pairing degradations: %s of %s (%s%%)\n\n' "$DEGRADED" "$PAIRINGS" "$DEG_PERCENT"
+        printf '| Degrade reason | Count |\n'
+        printf '|---|---:|\n'
+        jq -r 'select(.vendor_pairing.degraded != null and .vendor_pairing.degraded != "") | .vendor_pairing.degraded' "$LOG" | \
+            sort | uniq -c | sort -rn | \
+            awk '{ count = $1; $1 = ""; sub(/^ /, ""); printf "| %s | %d |\n", $0, count }'
+        printf '\n_Persistent `shim_unavailable` patterns mean a required Codex shim is consistently missing — install the shim or remove cross-vendor pairing from the milestone intake to stop the degradation flag firing._\n\n'
+    else
+        printf '_No pairing degradations recorded. Alternation fired cleanly on every cross-vendor dispatch._\n\n'
+    fi
+
+    printf '### Pair-role distribution\n\n'
+    printf '| Pair role | Count |\n'
+    printf '|---|---:|\n'
+    jq -r 'select(.vendor_pairing.pair_role != null) | .vendor_pairing.pair_role' "$LOG" 2>/dev/null | \
+        sort | uniq -c | sort -rn | \
+        awk '{ count = $1; $1 = ""; sub(/^ /, ""); printf "| %s | %d |\n", $0, count }'
+    printf '\n'
+fi
+
+# Cross-vendor cost rollup summary.
+ANTHROPIC=$(jq -r 'select(.vendor == "anthropic")' "$LOG" 2>/dev/null | wc -l | tr -d ' ')
+OPENAI=$(jq -r 'select(.vendor == "openai")' "$LOG" 2>/dev/null | wc -l | tr -d ' ')
+if [ "$OPENAI" -gt 0 ] || [ "$ANTHROPIC" -gt 0 ]; then
+    printf '## Cross-vendor split (totals)\n\n'
+    printf -- '- Anthropic: %s dispatches\n' "$ANTHROPIC"
+    printf -- '- OpenAI: %s dispatches\n\n' "$OPENAI"
+    printf '_Use this and the Vendor × tier table above with your billing data for cross-vendor cost rollups._\n'
+fi

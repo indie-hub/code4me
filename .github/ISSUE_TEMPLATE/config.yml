@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question / "how do I" / "what's the convention for"
+    url: https://github.com/Bruno/code4me-plugin/discussions
+    about: Open a Discussion rather than an Issue. Discussions are for clarification, design questions, and usage patterns. Issues are for bugs, features, and probe regressions specifically.
+  - name: code4me documentation
+    url: https://github.com/Bruno/code4me-plugin/tree/main/docs
+    about: Tutorial / how-to / reference / explanation docs. Read these first — most "how do I" questions are already answered.
+  - name: Security vulnerability
+    url: https://github.com/Bruno/code4me-plugin/security/advisories/new
+    about: Report security issues privately via GitHub's vulnerability reporting. See SECURITY.md for what's in scope.

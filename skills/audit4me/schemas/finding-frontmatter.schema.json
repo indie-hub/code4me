@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Bruno/code4me-plugin/schemas/audit4me-finding-frontmatter-v1.json",
+  "title": "audit4me finding frontmatter (v1)",
+  "description": "YAML frontmatter at the top of each .code4me/audit4me/findings/{id}.md file. Machine-readable metadata; tooling (/audit4me-status, /audit4me-findings, /audit4me-apply) reads this without parsing the markdown body. The body itself is freeform markdown (summary, vendor perspectives, proposed fix, failing test, apply-readiness).",
+  "type": "object",
+  "required": [
+    "id",
+    "severity",
+    "category",
+    "file",
+    "line_range",
+    "content_hash",
+    "audited_at",
+    "vendors_agreed",
+    "confidence",
+    "status"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^F-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}$",
+      "description": "Finding identifier. Format: F-{YYYY-MM-DD}-{4-digit-sequence}. Sequence is per-day; resets at UTC midnight."
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["NIT", "MINOR", "MAJOR", "CRITICAL"],
+      "description": "Severity level. NIT = style/aesthetic; MINOR = code quality but no functional impact; MAJOR = correctness or security issue that should be fixed; CRITICAL = active or imminent harm (data loss, security breach, availability)."
+    },
+    "category": {
+      "type": "string",
+      "enum": ["bugs", "security", "performance", "maintainability", "test_gaps"],
+      "description": "Audit category that produced this finding."
+    },
+    "file": {
+      "type": "string",
+      "description": "Project-relative path of the file the finding is about."
+    },
+    "line_range": {
+      "type": "string",
+      "pattern": "^[0-9]+(-[0-9]+)?$",
+      "description": "Line range within the file. Single line ('87') or inclusive range ('87-92')."
+    },
+    "content_hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "description": "Content hash of the file at the time the finding was produced. If the file's current hash differs, the finding is stale (apply-readiness check fails)."
+    },
+    "audited_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC timestamp when the audit pass that produced this finding completed."
+    },
+    "vendors_agreed": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": ["anthropic", "openai", "deepseek"]
+      },
+      "description": "Vendors that independently flagged this finding. Each vendor's verbatim quote appears in the markdown body under '## Evidence'."
+    },
+    "vendors_dissented": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": ["anthropic", "openai", "deepseek"]
+      },
+      "default": [],
+      "description": "Vendors that audited this file in this category but did not flag this finding. Used to compute dissent in 3-vendor mode."
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["low", "medium", "high"],
+      "description": "Composite confidence from multi-vendor agreement, reproducibility (failing test), LSP/linter cross-check, and test-coverage-at-line. high = all signals positive; medium = most positive; low = only agreement."
+    },
+    "proposed_fix": {
+      "type": "boolean",
+      "default": false,
+      "description": "True if the finding body includes a proposed fix that /audit4me-apply can dispatch. Computed from severity >= propose_fix_min_severity AND failing_test_path populated (if required) AND unanimity (if required)."
+    },
+    "failing_test_path": {
+      "type": "string",
+      "description": "Project-relative path to a failing test demonstrating the bug (for category=bugs and category=security primarily). Omitted when the auditor couldn't write a test or category doesn't typically warrant one."
+    },
+    "rules_version": {
+      "type": "string",
+      "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "rules_version active when this finding was produced."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["open", "applied", "dismissed", "stale"],
+      "description": "open = awaiting user review or apply. applied = /audit4me-apply has dispatched the fix. dismissed = /audit4me-dismiss marked won't-fix (reason recorded in body). stale = file has changed since the finding was produced; needs re-audit before action."
+    },
+    "dismissal_reason": {
+      "type": "string",
+      "description": "Reason recorded when status=dismissed via /audit4me-dismiss. Omitted otherwise."
+    }
+  }
+}

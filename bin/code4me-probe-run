@@ -1,0 +1,433 @@
+#!/usr/bin/env bash
+# code4me-probe-run — interactive probe-suite runner with LLM-as-judge
+# comparison and regression-budget tracking.
+#
+# For each probe under probes/, prints the Input prompt for the user to
+# paste into a fresh Claude Code session, captures the orchestrator's
+# response on stdin (terminated by a line containing exactly "EOF"),
+# runs an LLM-as-judge call against the probe's Expected block, and
+# writes a JSONL result row.
+#
+# After the suite completes, compares the current results against the
+# baseline (default probes/baseline.jsonl) and reports flips. Exits
+# non-zero if flips exceed the regression budget (probes/budget.toml,
+# or --max-flips CLI override).
+#
+# Usage:
+#   bin/code4me-probe-run                              # all probes
+#   bin/code4me-probe-run classification               # one subdirectory
+#   bin/code4me-probe-run probes/cross-vendor/01-*.md  # specific probe(s)
+#
+# Flags:
+#   --max-flips=N           Override budget.toml's max_flips for this run.
+#   --baseline=PATH         Compare against PATH instead of the budget default.
+#   --update-baseline       After running, promote current results to baseline.
+#                           Skipped if any probe errored.
+#   --no-budget             Skip the flip check entirely.
+#   --judge-model=MODEL     LLM-as-judge model (default: claude-sonnet-4-6).
+#
+# Required:
+#   - ANTHROPIC_API_KEY  (for the LLM-as-judge call)
+#   - jq, curl
+#
+# Output:
+#   probes/results-{YYYY-MM-DDTHHMMSS}.jsonl  (one line per probe)
+
+set -u
+
+# Temp files created during the run (judge prompt, flip-check maps). The trap
+# guarantees cleanup even when the run is interrupted (^C) or errors out.
+tmp_prompt=""
+current_map=""
+baseline_map=""
+trap 'rm -f "$tmp_prompt" "$current_map" "$baseline_map"' EXIT INT TERM
+
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PLUGIN_ROOT="$( cd "${SCRIPT_DIR}/.." && pwd )"
+PROBES_DIR="${PLUGIN_ROOT}/probes"
+BUDGET_FILE="${PROBES_DIR}/budget.toml"
+
+# ---- pre-flight ----
+
+for cmd in jq curl; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        printf 'error: %s is required but not on PATH\n' "$cmd" >&2
+        exit 1
+    fi
+done
+
+if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+    printf 'error: ANTHROPIC_API_KEY is required for the LLM-as-judge call\n' >&2
+    exit 1
+fi
+
+# ---- budget.toml parsing ----
+#
+# Tiny TOML reader for our needs: key = value, # comments, no tables.
+# Returns the value with surrounding quotes stripped, or empty if absent.
+
+read_setting() {
+    local key="$1" default="$2" file="${3:-$BUDGET_FILE}"
+    if [ ! -r "$file" ]; then
+        printf '%s' "$default"; return
+    fi
+    local val
+    val=$(grep -E "^[[:space:]]*${key}[[:space:]]*=" "$file" 2>/dev/null \
+        | head -1 \
+        | sed -E "s/^[[:space:]]*${key}[[:space:]]*=[[:space:]]*//; s/[[:space:]]*#.*\$//; s/^\"//; s/\"$//; s/^'//; s/'$//")
+    if [ -z "$val" ]; then printf '%s' "$default"; else printf '%s' "$val"; fi
+}
+
+BUDGET_MAX_FLIPS=$(read_setting max_flips 3)
+BUDGET_COUNT_SKIPS=$(read_setting count_skips false)
+BUDGET_COUNT_ERRORS=$(read_setting count_errors false)
+BUDGET_BASELINE=$(read_setting baseline "probes/baseline.jsonl")
+
+# Resolve baseline path relative to plugin root if not absolute.
+case "$BUDGET_BASELINE" in
+    /*) ;;
+    *) BUDGET_BASELINE="${PLUGIN_ROOT}/${BUDGET_BASELINE}" ;;
+esac
+
+JUDGE_MODEL="${CODE4ME_JUDGE_MODEL:-claude-sonnet-4-6}"
+DO_BUDGET=1
+DO_UPDATE_BASELINE=0
+MAX_FLIPS="$BUDGET_MAX_FLIPS"
+BASELINE_PATH="$BUDGET_BASELINE"
+
+# ---- CLI flag parsing ----
+
+probe_args=()
+for arg in "$@"; do
+    case "$arg" in
+        --max-flips=*)
+            MAX_FLIPS="${arg#--max-flips=}" ;;
+        --baseline=*)
+            BASELINE_PATH="${arg#--baseline=}"
+            case "$BASELINE_PATH" in
+                /*) ;;
+                *) BASELINE_PATH="${PLUGIN_ROOT}/${BASELINE_PATH}" ;;
+            esac ;;
+        --update-baseline)
+            DO_UPDATE_BASELINE=1 ;;
+        --no-budget)
+            DO_BUDGET=0 ;;
+        --judge-model=*)
+            JUDGE_MODEL="${arg#--judge-model=}" ;;
+        --help|-h)
+            sed -n '/^# /p' "$0" | sed 's/^# //; s/^#//' | head -40
+            exit 0 ;;
+        *)
+            probe_args+=("$arg") ;;
+    esac
+done
+
+# ---- probe discovery ----
+
+discover_probes() {
+    if [ "$#" -eq 0 ]; then
+        find "$PROBES_DIR" -type f -name '*.md' \
+            ! -path '*/fixture-skeleton/*' \
+            ! -name 'README.md' | sort
+        return
+    fi
+    for arg in "$@"; do
+        if [ -d "${PROBES_DIR}/${arg}" ]; then
+            find "${PROBES_DIR}/${arg}" -type f -name '*.md' \
+                ! -name 'README.md' | sort
+        elif [ -f "$arg" ]; then
+            printf '%s\n' "$arg"
+        elif [ -f "${PROBES_DIR}/${arg}" ]; then
+            printf '%s\n' "${PROBES_DIR}/${arg}"
+        else
+            for f in $arg; do
+                if [ -f "$f" ]; then printf '%s\n' "$f"; fi
+            done
+        fi
+    done
+}
+
+# ---- probe parsing ----
+
+extract_section() {
+    local file="$1" heading="$2"
+    awk -v h="$heading" '
+        $0 == "## " h { in_section = 1; next }
+        in_section && /^## / { exit }
+        in_section { print }
+    ' "$file" | awk '
+        NF { found = 1 }
+        found { lines[++n] = $0 }
+        END {
+            while (n > 0 && lines[n] !~ /[^[:space:]]/) n--
+            for (i = 1; i <= n; i++) print lines[i]
+        }
+    '
+}
+
+# ---- LLM-as-judge ----
+
+build_judge_prompt() {
+    local probe_path="$1" input="$2" expected="$3" response="$4"
+    cat <<EOF
+You are evaluating whether a multi-agent orchestrator's response to a code4me probe matches the probe's documented expectation. You are NOT evaluating whether the response is "good" — only whether it matches the specific Expected block on the probe's three axes: kind, weight, and team composition.
+
+PROBE FILE: ${probe_path}
+
+INPUT PROMPT (sent to the orchestrator):
+---
+${input}
+---
+
+EXPECTED (from the probe file):
+---
+${expected}
+---
+
+ORCHESTRATOR RESPONSE (captured from a fresh session):
+---
+${response}
+---
+
+Score the match on three axes. Each axis: "match" or "mismatch", with a one-line reason. The axes:
+
+1. **kind**: does the orchestrator's announced kind match the probe's expected kind?
+2. **weight**: does the orchestrator's announced weight (including auto-escalation if any) match the probe's expected weight?
+3. **team**: does the orchestrator's announced team match the expected team — names, vendor tags, mode tags where applicable? Order is informational; required additions/skips are required.
+
+The overall outcome:
+- **pass**: all three axes match.
+- **partial**: one axis mismatches but the others match.
+- **fail**: two or more axes mismatch.
+
+Return a single JSON object, no prose around it, no markdown code fences:
+
+{
+  "outcome": "pass" | "partial" | "fail",
+  "kind": {"result": "match" | "mismatch", "reason": "<one-line>"},
+  "weight": {"result": "match" | "mismatch", "reason": "<one-line>"},
+  "team": {"result": "match" | "mismatch", "reason": "<one-line>"},
+  "summary": "<one-line summary of the comparison>"
+}
+EOF
+}
+
+call_judge() {
+    local prompt_file="$1"
+    local body
+    body=$(jq -n \
+        --arg model "$JUDGE_MODEL" \
+        --rawfile prompt "$prompt_file" \
+        '{
+            model: $model,
+            max_tokens: 1024,
+            messages: [{role: "user", content: $prompt}]
+        }')
+    curl -sS https://api.anthropic.com/v1/messages \
+        -H "x-api-key: ${ANTHROPIC_API_KEY}" \
+        -H "anthropic-version: 2023-06-01" \
+        -H "content-type: application/json" \
+        -d "$body"
+}
+
+# ---- main loop ----
+
+probes=( $(discover_probes "${probe_args[@]}") )
+
+if [ "${#probes[@]}" -eq 0 ]; then
+    printf 'No probes matched.\n' >&2
+    exit 1
+fi
+
+stamp=$(date -u +%Y-%m-%dT%H%M%S)
+results_file="${PROBES_DIR}/results-${stamp}.jsonl"
+: > "$results_file"
+
+pass_count=0
+fail_count=0
+partial_count=0
+error_count=0
+total="${#probes[@]}"
+
+printf '\ncode4me-probe-run — %d probe(s) queued\n' "$total"
+printf 'Results: %s\n' "$results_file"
+printf 'Judge model: %s\n' "$JUDGE_MODEL"
+if [ "$DO_BUDGET" -eq 1 ]; then
+    printf 'Budget: max_flips=%s; baseline=%s\n' "$MAX_FLIPS" "$BASELINE_PATH"
+fi
+printf '\n'
+
+for i in "${!probes[@]}"; do
+    probe="${probes[$i]}"
+    rel=$(printf '%s' "$probe" | sed "s|${PLUGIN_ROOT}/||")
+    printf '\n========================================\n'
+    printf 'PROBE %d/%d: %s\n' $((i+1)) "$total" "$rel"
+    printf '========================================\n\n'
+
+    input=$(extract_section "$probe" "Input prompt")
+    expected=$(extract_section "$probe" "Expected")
+
+    if [ -z "$input" ] || [ -z "$expected" ]; then
+        printf 'SKIP: probe missing Input prompt or Expected section\n' >&2
+        printf '{"probe":"%s","outcome":"skip","reason":"missing input or expected"}\n' "$rel" >> "$results_file"
+        error_count=$((error_count+1))
+        continue
+    fi
+
+    printf 'INPUT PROMPT (paste into a fresh Claude Code session):\n\n'
+    printf -- '----\n%s\n----\n\n' "$input"
+    printf 'Then paste the orchestrator response below.\n'
+    printf 'End the response with a line containing exactly: EOF\n'
+    printf 'Or enter SKIP to skip this probe.\n\n'
+
+    response=""
+    while IFS= read -r line; do
+        if [ "$line" = "EOF" ]; then break; fi
+        if [ "$line" = "SKIP" ]; then
+            response="__SKIP__"
+            break
+        fi
+        response="${response}${line}"$'\n'
+    done
+
+    if [ "$response" = "__SKIP__" ]; then
+        printf '{"probe":"%s","outcome":"skip","reason":"user skipped"}\n' "$rel" >> "$results_file"
+        error_count=$((error_count+1))
+        continue
+    fi
+
+    tmp_prompt=$(mktemp)
+    build_judge_prompt "$rel" "$input" "$expected" "$response" > "$tmp_prompt"
+
+    raw=$(call_judge "$tmp_prompt")
+    rm -f "$tmp_prompt"
+
+    judge_text=$(printf '%s' "$raw" | jq -r '.content[0].text // empty' 2>/dev/null)
+
+    if [ -z "$judge_text" ]; then
+        printf 'ERROR: judge call failed or returned no content\n' >&2
+        printf '%s\n' "$raw" | head -200 >&2
+        printf '{"probe":"%s","outcome":"error","reason":"judge call failed"}\n' "$rel" >> "$results_file"
+        error_count=$((error_count+1))
+        continue
+    fi
+
+    verdict=$(printf '%s' "$judge_text" | jq -c . 2>/dev/null)
+    if [ -z "$verdict" ]; then
+        printf 'ERROR: judge response was not valid JSON\n' >&2
+        printf '%s\n' "$judge_text" | head -50 >&2
+        printf '{"probe":"%s","outcome":"error","reason":"judge response invalid JSON","raw":%s}\n' \
+            "$rel" "$(printf '%s' "$judge_text" | jq -Rs .)" >> "$results_file"
+        error_count=$((error_count+1))
+        continue
+    fi
+
+    outcome=$(printf '%s' "$verdict" | jq -r '.outcome // "error"')
+    summary=$(printf '%s' "$verdict" | jq -r '.summary // "no summary"')
+
+    case "$outcome" in
+        pass) pass_count=$((pass_count+1)) ;;
+        partial) partial_count=$((partial_count+1)) ;;
+        fail) fail_count=$((fail_count+1)) ;;
+        *) error_count=$((error_count+1)) ;;
+    esac
+
+    printf '\nVERDICT: %s — %s\n' "$outcome" "$summary"
+
+    jq -n \
+        --arg probe "$rel" \
+        --argjson verdict "$verdict" \
+        '{probe: $probe} + $verdict' >> "$results_file"
+done
+
+# ---- summary ----
+
+printf '\n========================================\n'
+printf 'SUMMARY\n'
+printf '========================================\n'
+printf '  Total:    %d\n' "$total"
+printf '  Pass:     %d\n' "$pass_count"
+printf '  Partial:  %d\n' "$partial_count"
+printf '  Fail:     %d\n' "$fail_count"
+printf '  Error:    %d\n' "$error_count"
+printf '  Results:  %s\n' "$results_file"
+
+# ---- regression-budget check ----
+
+flips=0
+flip_detail=""
+budget_failed=0
+
+if [ "$DO_BUDGET" -eq 1 ]; then
+    if [ ! -r "$BASELINE_PATH" ]; then
+        printf '\nBaseline not found at %s — skipping flip check.\n' "$BASELINE_PATH"
+        printf '  (Run with --update-baseline once you have a clean run to establish one.)\n'
+    else
+        printf '\nFlip check (baseline: %s):\n' "$BASELINE_PATH"
+
+        # Build a temp map of current results: probe -> outcome
+        current_map=$(mktemp)
+        jq -r '[.probe, .outcome] | @tsv' "$results_file" > "$current_map"
+
+        # Compare against baseline.
+        baseline_map=$(mktemp)
+        jq -r '[.probe, .outcome] | @tsv' "$BASELINE_PATH" > "$baseline_map"
+
+        # For each probe in the current results, look up baseline outcome
+        # and count flips (excluding skip/error per budget settings).
+        while IFS=$'\t' read -r probe current_outcome; do
+            baseline_outcome=$(grep -F -m1 "${probe}"$'\t' "$baseline_map" | cut -f2)
+            if [ -z "$baseline_outcome" ]; then
+                # New probe — not a flip; note it.
+                flip_detail="${flip_detail}  + (new) ${probe} → ${current_outcome}\n"
+                continue
+            fi
+            if [ "$current_outcome" = "$baseline_outcome" ]; then
+                continue
+            fi
+            # It's a flip — check budget settings on skip/error.
+            case "$current_outcome" in
+                skip)
+                    if [ "$BUDGET_COUNT_SKIPS" != "true" ]; then continue; fi ;;
+                error)
+                    if [ "$BUDGET_COUNT_ERRORS" != "true" ]; then continue; fi ;;
+            esac
+            flips=$((flips+1))
+            flip_detail="${flip_detail}  ~ ${probe}: ${baseline_outcome} → ${current_outcome}\n"
+        done < "$current_map"
+
+        rm -f "$current_map" "$baseline_map"
+
+        printf '  Flips: %d (budget: %d)\n' "$flips" "$MAX_FLIPS"
+        if [ -n "$flip_detail" ]; then
+            printf '%b' "$flip_detail"
+        fi
+
+        if [ "$flips" -gt "$MAX_FLIPS" ]; then
+            printf '\n  BUDGET EXCEEDED: %d flips > %d allowed\n' "$flips" "$MAX_FLIPS"
+            budget_failed=1
+        else
+            printf '  Within budget.\n'
+        fi
+    fi
+fi
+
+# ---- update baseline (optional) ----
+
+if [ "$DO_UPDATE_BASELINE" -eq 1 ]; then
+    if [ "$error_count" -gt 0 ]; then
+        printf '\nSkipping --update-baseline: %d probe(s) errored. Re-run after fixing errors.\n' "$error_count"
+    else
+        printf '\nUpdating baseline: %s -> %s\n' "$results_file" "$BASELINE_PATH"
+        cp "$results_file" "$BASELINE_PATH"
+    fi
+fi
+
+printf '\n'
+
+# ---- exit code ----
+
+if [ "$fail_count" -gt 0 ] || [ "$error_count" -gt 0 ] || [ "$budget_failed" -eq 1 ]; then
+    exit 1
+fi
+exit 0

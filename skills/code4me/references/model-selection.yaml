@@ -1,0 +1,98 @@
+# Per-(subagent, weight) → Tier defaults.
+#
+# Extracted from the prose in `model-selection.md` so the orchestrator can
+# evaluate without parsing English. The prose stays as the human-facing
+# explanation; this file is the authoritative machine-readable form.
+#
+# Tier resolution order (see `cross-vendor-policy.md` §Resolution algorithm):
+#   1. Look up tier from `defaults[role][weight]` or `defaults[role]['any']`
+#   2. Apply `hard_floors` (may upgrade)
+#   3. Apply `deviation_rules` (may upgrade)
+#   4. Resolve to concrete model via `vendor-models.yaml[vendor][tier]`
+
+defaults:
+  lead-architect:
+    standard: high
+    critical: high
+  challenger-architect:
+    standard: high
+    critical: high
+  spec-to-test:
+    standard: mid
+    critical: mid
+  developer:
+    conversation: low
+    light: mid
+    standard: mid
+    critical: high
+  combined-reviewer:
+    conversation: low
+    light: low
+  verification:
+    standard: mid
+    critical: mid
+  code-reviewer:
+    standard: mid
+    critical: high
+  qa:
+    standard: mid
+    critical: mid
+    bug_reproduction: low
+  security-reviewer:
+    standard: mid
+    critical: high
+  doc-writer:
+    standard: mid
+    critical: mid
+  researcher:
+    any: mid
+    nuanced_comparison: high
+  product-coach:
+    any: mid
+  # v0.10.4+: Trivial weight is inline orchestrator work — no subagent dispatch.
+  # No tier resolution applies because no Task call fires; the orchestrator uses
+  # its own session model (typically Opus) for the inline edit. See
+  # references/trivial-classification.md for the whitelist + justification rules.
+  # Recorded in dispatch log as subagent="orchestrator-inline (trivial)".
+  #
+  # v0.10+: Codex-side dispatches go through the codex-bridge skill, not subagents.
+  # The bridge looks up the tier by (role, weight) using the same defaults as the
+  # Claude-side roles above (e.g., codex-bridge architect at Critical resolves to
+  # tier=high, same as lead-architect/challenger-architect). No separate entries
+  # needed here — the orchestrator uses `(role, vendor=openai)` for the lookup,
+  # mapping role names like `architect` / `developer` / `code-reviewer` /
+  # `spec-to-test` / `security-reviewer` / `verification` / `lead-architect`
+  # to the same tier defaults as their Claude-side counterparts.
+  #
+  # Historical note (pre-v0.10): codex-architect / codex-developer / etc. each had
+  # their own entry here when they were subagent shims. v0.10 consolidated them
+  # into the codex-bridge skill; tier resolution now goes through the underlying
+  # role name (lead-architect, developer, etc.) regardless of vendor.
+
+hard_floors:
+  - id: architect-not-low
+    rule: "any role whose name contains 'architect' never runs at tier 'low'"
+  - id: critical-not-low
+    rule: "Critical Mode dispatches never run at tier 'low'"
+  - id: auto-escalated-no-downgrade
+    rule: "auto-escalated work: tier never downgraded below the resolved value"
+  - id: cross-vendor-no-floor-relaxation
+    rule: "cross-vendor pairing does not relax tier floors — a codex developer at Critical is still tier 'high'"
+
+deviation_rules:
+  - id: complexity-surprise
+    trigger: "the work turned out to involve gnarly logic the spec didn't fully describe"
+    action: "upgrade one tier; record default_tier and actual_tier in the dispatch log"
+  - id: stakes-change-midflight
+    trigger: "auto-escalation fires after dispatch begins"
+    action: "reissue the Context Pack at the new weight's tier"
+  - id: previous-attempt-failed
+    trigger: "a subagent at the default tier produced a poor result and is being re-dispatched"
+    action: "upgrade one tier — don't re-dispatch at the same level expecting different results"
+  - id: user-requests-cheap
+    trigger: "user explicitly asks for the cheapest viable model"
+    action: "honour the request, but auto-escalation symptom-class work still gets at least 'mid' regardless"
+
+# Orchestrator runs Opus by recommendation (see model-selection.md §The orchestrator's own model).
+# This is metadata only — the user picks the session model when they invoke the plugin.
+orchestrator_recommended_tier: high

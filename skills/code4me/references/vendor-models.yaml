@@ -1,0 +1,36 @@
+# Vendor → Tier → Concrete Model
+#
+# The orchestrator picks a tier per (subagent, weight) via `model-selection.yaml`.
+# This file resolves a (vendor, tier) pair to the concrete model identifier the
+# Task dispatch (or the Codex shim's --model flag) passes through.
+#
+# When a vendor ships a new model in a tier, edit this file — no agent file or
+# orchestrator logic needs to change. Per-project overrides live at
+# `.code4me/vendor-models.local.yaml` and win over this baseline when present.
+
+anthropic:
+  low:  claude-haiku-4-5-20251001
+  mid:  claude-sonnet-4-6
+  high: claude-opus-4-6
+
+openai:
+  low:  gpt-5.4-mini
+  mid:  gpt-5.4
+  high: gpt-5.5
+  # alternate "high" for code-heavy work — set high_code on a role's
+  # cross_vendor_pair_with entry to prefer this over the generic high.
+  high_code: gpt-5.3-codex
+
+# DeepSeek (v0.11+) via DeepSeek's Anthropic-compatible endpoint at
+# https://api.deepseek.com/anthropic. The bridge invokes Claude Code CLI as a
+# subprocess with ANTHROPIC_BASE_URL pointed at DeepSeek and ANTHROPIC_AUTH_TOKEN
+# set to $DEEPSEEK_API_KEY. See skills/deepseek-bridge/SKILL.md for the
+# invocation contract. Note: the `[1m]` suffix on the `high` tier denotes
+# DeepSeek's 1-million-context variant — cost is higher than plain v4-pro, so
+# `mid` stays at the default v4-pro. Roles needing both strength and long
+# context (e.g., verification on a large suite, security-reviewer with full
+# project sweep) resolve to `high` and get the [1m] variant.
+deepseek:
+  low:  deepseek-v4-flash
+  mid:  deepseek-v4-pro
+  high: "deepseek-v4-pro[1m]"

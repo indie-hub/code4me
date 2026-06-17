@@ -1,0 +1,390 @@
+#!/usr/bin/env bash
+# code4me-preflight — sanity checks before high-stakes dispatch.
+#
+# Validates that the environment is in a state the orchestrator can
+# safely dispatch from. Run manually before invoking Critical milestones
+# (or by the orchestrator itself as a pre-Critical step) to surface
+# missing setup as a clear error rather than a mid-dispatch surprise.
+#
+# Usage:
+#   bin/code4me-preflight                    # check everything
+#   bin/code4me-preflight --critical         # extra checks for Critical Mode
+#   bin/code4me-preflight --quiet            # exit code only, no markdown
+#
+# Output: a markdown report listing each check + verdict. Exit code is
+# non-zero if any check fails (when --quiet) or if any REQUIRED check
+# fails (default — warnings don't fail the run).
+#
+# Required: bash. Optional: jq (for LSP/settings parsing).
+
+set -u
+
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PLUGIN_ROOT="$( cd "${SCRIPT_DIR}/.." && pwd )"
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+
+# Flags.
+MODE_CRITICAL=0
+QUIET=0
+for arg in "$@"; do
+    case "$arg" in
+        --critical) MODE_CRITICAL=1 ;;
+        --quiet)    QUIET=1 ;;
+        --help|-h)
+            sed -n '/^# /p' "$0" | sed 's/^# //; s/^#//' | head -20
+            exit 0 ;;
+    esac
+done
+
+# Verdict tracking. STATUS values: ok | warn | fail.
+declare -a CHECK_NAMES CHECK_STATUS CHECK_DETAIL CHECK_REQUIRED
+declare -i FAIL_COUNT=0 WARN_COUNT=0 OK_COUNT=0
+
+record() {
+    local name="$1" status="$2" detail="$3" required="${4:-1}"
+    CHECK_NAMES+=("$name")
+    CHECK_STATUS+=("$status")
+    CHECK_DETAIL+=("$detail")
+    CHECK_REQUIRED+=("$required")
+    case "$status" in
+        ok)   OK_COUNT=$((OK_COUNT+1)) ;;
+        warn) WARN_COUNT=$((WARN_COUNT+1)) ;;
+        fail) FAIL_COUNT=$((FAIL_COUNT+1)) ;;
+    esac
+}
+
+# ---- check 0: platform + shell environment (v0.13+) ----
+# Surfaces the detected OS and shell environment so users can confirm their
+# setup is supported. The hooks and bin scripts require bash; native Windows
+# (cmd.exe / PowerShell only) is NOT supported. Git Bash and WSL are.
+PLATFORM_LABEL="unknown"
+PLATFORM_SUPPORT="ok"
+PLATFORM_DETAIL=""
+case "$(uname -s 2>/dev/null)" in
+    Linux*)
+        if [ -n "${WSL_DISTRO_NAME:-}" ] || grep -qi microsoft /proc/version 2>/dev/null; then
+            PLATFORM_LABEL="Windows + WSL"
+            PLATFORM_DETAIL="WSL distro: ${WSL_DISTRO_NAME:-detected from /proc/version}. Full Linux environment; bash hooks and bin scripts run natively."
+        else
+            PLATFORM_LABEL="Linux"
+            PLATFORM_DETAIL="Native Linux; bash hooks and bin scripts run natively. CI runs on ubuntu-latest."
+        fi
+        ;;
+    Darwin*)
+        PLATFORM_LABEL="macOS"
+        PLATFORM_DETAIL="Native macOS; bash hooks and bin scripts run natively. CI runs on macos-latest."
+        ;;
+    MINGW*|MSYS*|CYGWIN*)
+        PLATFORM_LABEL="Windows + Git Bash"
+        PLATFORM_SUPPORT="warn"
+        PLATFORM_DETAIL="Git Bash (MINGW/MSYS) detected. Supported but untested in CI — verify manually after changes to hooks/ or bin/. Known quirks: CRLF line endings on clone (mitigated by .gitattributes), \$CLAUDE_PROJECT_DIR may arrive as a Windows path. See docs/howto-windows.md."
+        ;;
+    *)
+        # Couldn't detect — might be native Windows running this somehow,
+        # or an exotic environment. If we got this far, bash IS running
+        # (since this script is bash). Warn but don't fail.
+        PLATFORM_SUPPORT="warn"
+        PLATFORM_DETAIL="Could not detect OS via uname. If you're on native Windows (cmd.exe / PowerShell), this script shouldn't run at all — you need Git Bash or WSL. See docs/howto-windows.md."
+        ;;
+esac
+record "Platform" "$PLATFORM_SUPPORT" "$PLATFORM_LABEL — $PLATFORM_DETAIL" 0
+
+# ---- check 1: .code4me/ working directory ----
+if [ -d "$PROJECT_DIR/.code4me" ]; then
+    if [ -w "$PROJECT_DIR/.code4me" ]; then
+        record ".code4me/ working directory" ok "present and writable at $PROJECT_DIR/.code4me/"
+    else
+        record ".code4me/ working directory" fail "exists at $PROJECT_DIR/.code4me/ but is not writable by this user"
+    fi
+else
+    record ".code4me/ working directory" warn "missing — orchestrator will scaffold from templates/.code4me-skeleton on first dispatch, or run /code4me-init now"
+fi
+
+# ---- check 2: hooks installed in .claude/settings.json ----
+SETTINGS="$PROJECT_DIR/.claude/settings.json"
+if [ ! -r "$SETTINGS" ]; then
+    record "Hook installation" warn "no .claude/settings.json at project root — hooks not installed; framework still works but runtime defense-in-depth is off. See README \"Hook protections\""
+else
+    HOOKS_MISSING=""
+    for hook in check-test-protection check-forbidden-conditions check-critical-write-allowlist; do
+        if ! grep -q "$hook" "$SETTINGS" 2>/dev/null; then
+            HOOKS_MISSING="${HOOKS_MISSING}${hook}.sh, "
+        fi
+    done
+    if [ -z "$HOOKS_MISSING" ]; then
+        record "Hook installation" ok "all three PreToolUse hooks referenced in $SETTINGS"
+    else
+        HOOKS_MISSING="${HOOKS_MISSING%, }"
+        record "Hook installation" warn "missing from settings.json: $HOOKS_MISSING"
+    fi
+fi
+
+# ---- check 2b: hook command paths actually resolve (v0.13.1+) ----
+# Catches the classic failure: a hook command still says <PLUGIN_DIR>, or points
+# at a stale absolute path that no longer exists on this machine. The fix is to
+# (re)run bin/code4me-install, which self-locates the plugin and rewrites paths.
+if [ -r "$SETTINGS" ] && command -v jq >/dev/null 2>&1; then
+    BAD_PATHS=""
+    while IFS= read -r cmdpath; do
+        [ -n "$cmdpath" ] || continue
+        case "$cmdpath" in
+            *"<PLUGIN_DIR>"*) BAD_PATHS="${BAD_PATHS}[$cmdpath: unsubstituted <PLUGIN_DIR>] " ; continue ;;
+        esac
+        [ -r "$cmdpath" ] || BAD_PATHS="${BAD_PATHS}[$cmdpath: missing] "
+    done < <(jq -r '.hooks.PreToolUse[]?.hooks[]?.command // empty
+                    | select(test("/hooks/(check-test-protection|check-forbidden-conditions|check-critical-write-allowlist|check-buglog-helper|check-lsp-first-on-source)\\.sh"))
+                    | sub("^bash +";"")' "$SETTINGS" 2>/dev/null)
+    if [ -n "$BAD_PATHS" ]; then
+        record "Hook command paths" fail "code4me hook command(s) don't resolve: ${BAD_PATHS% } — run: bash $PLUGIN_ROOT/bin/code4me-install"
+    else
+        record "Hook command paths" ok "referenced code4me hook scripts exist on disk"
+    fi
+fi
+
+# ---- check 3: LSP enabled (env var) ----
+if [ -n "${ENABLE_LSP_TOOL:-}" ] && [ "$ENABLE_LSP_TOOL" = "1" ]; then
+    record "LSP enabled" ok "ENABLE_LSP_TOOL=1 in current environment"
+elif [ -r "$SETTINGS" ] && grep -q '"ENABLE_LSP_TOOL"' "$SETTINGS" 2>/dev/null; then
+    record "LSP enabled" ok "ENABLE_LSP_TOOL set in .claude/settings.json"
+else
+    record "LSP enabled" warn "ENABLE_LSP_TOOL=1 not in env or settings.json — LSP-backed tooling is off; subagents fall back to Read/Grep (more context-expensive)"
+fi
+
+# ---- check 4: .lsp.json present in plugin ----
+if [ -r "$PLUGIN_ROOT/.lsp.json" ]; then
+    record "Plugin LSP configurations" ok "found $PLUGIN_ROOT/.lsp.json"
+else
+    record "Plugin LSP configurations" fail "no .lsp.json at plugin root ($PLUGIN_ROOT)"
+fi
+
+# ---- check 4-proj: project .lsp.json is valid + declared paths resolve (v0.13.1+) ----
+PROJ_LSP="$PROJECT_DIR/.lsp.json"
+if [ -r "$PROJ_LSP" ]; then
+    if command -v jq >/dev/null 2>&1 && ! jq -e . "$PROJ_LSP" >/dev/null 2>&1; then
+        record "Project .lsp.json" fail "$PROJ_LSP is not valid JSON — regenerate with: bash $PLUGIN_ROOT/bin/code4me-install"
+    elif grep -q "<PLUGIN_DIR>" "$PROJ_LSP" 2>/dev/null; then
+        record "Project .lsp.json" fail "$PROJ_LSP has an unsubstituted <PLUGIN_DIR> — run: bash $PLUGIN_ROOT/bin/code4me-install"
+    elif command -v jq >/dev/null 2>&1; then
+        PROXY="$(jq -r '.cpp.args[]? | select(type=="string" and endswith("clangd-didopen-proxy.mjs"))' "$PROJ_LSP" 2>/dev/null | head -1)"
+        if [ -n "$PROXY" ] && [ ! -r "$PROXY" ]; then
+            record "Project .lsp.json" fail "C++ proxy path doesn't exist: $PROXY — run: bash $PLUGIN_ROOT/bin/code4me-install"
+        else
+            record "Project .lsp.json" ok "valid; declared LSP paths resolve"
+        fi
+    fi
+fi
+
+# ---- check 4b: per-language LSP handshake (v0.10.1+) ----
+# Spawn each declared language server, send a minimal LSP initialize, and
+# check for a JSON-RPC-shaped response. Uses bin/code4me-lsp-check (Python).
+# Each language reports separately so a single broken server doesn't drown
+# out the working ones.
+if [ -r "$PLUGIN_ROOT/.lsp.json" ] && [ -x "$PLUGIN_ROOT/bin/code4me-lsp-check" ] && command -v python3 >/dev/null 2>&1; then
+    LSP_JSON_OUTPUT=$(python3 "$PLUGIN_ROOT/bin/code4me-lsp-check" --json --timeout 8 "$PLUGIN_ROOT/.lsp.json" 2>/dev/null || echo '{"status":"fail"}')
+    LSP_OVERALL=$(printf '%s' "$LSP_JSON_OUTPUT" | jq -r '.status' 2>/dev/null)
+    if [ "$LSP_OVERALL" = "ok" ]; then
+        # Parse per-language and add a record each.
+        LANG_NAMES=$(printf '%s' "$LSP_JSON_OUTPUT" | jq -r '.languages | keys[]' 2>/dev/null)
+        for lang in $LANG_NAMES; do
+            STATUS=$(printf '%s' "$LSP_JSON_OUTPUT" | jq -r ".languages.\"$lang\".status" 2>/dev/null)
+            DETAIL=$(printf '%s' "$LSP_JSON_OUTPUT" | jq -r ".languages.\"$lang\".detail" 2>/dev/null)
+            record "LSP handshake: $lang" "$STATUS" "$DETAIL" 0
+        done
+    else
+        record "LSP handshakes" warn "code4me-lsp-check returned non-ok status; skipping per-language results" 0
+    fi
+elif ! command -v python3 >/dev/null 2>&1; then
+    record "LSP handshakes" warn "python3 not on PATH — can't run per-language LSP handshake check (install python3 or skip this check)" 0
+fi
+
+# ---- check 5: Codex CLI if codex-bridge expected ----
+# This is "soft" — we don't know if the user actually wants Codex bridging.
+# Record as warning regardless; the user filters in the report.
+if command -v codex >/dev/null 2>&1; then
+    if [ -n "${OPENAI_API_KEY:-}" ]; then
+        record "Codex CLI (optional)" ok "codex on PATH; OPENAI_API_KEY set — codex-bridge invocations will dispatch successfully"
+    else
+        record "Codex CLI (optional)" warn "codex CLI on PATH but OPENAI_API_KEY not set — that's OK if you've run 'codex login' (OAuth auth); the codex-bridge skill doesn't pre-check auth. The CLI's own auth state determines whether 'codex exec' succeeds when actually invoked" 0
+    fi
+else
+    record "Codex CLI (optional)" warn "codex CLI not on PATH — codex-bridge skill invocations will BLOCK at pre-flight with codex_cli_not_installed. Install per https://github.com/openai/codex if you want cross-vendor pairing" 0
+fi
+
+# ---- check 5b: DeepSeek bridging (optional, v0.11+) ----
+# Same "soft" treatment: we don't know if the user wants DeepSeek bridging.
+# The deepseek-bridge skill needs the `reasonix` CLI (DeepSeek-native agent;
+# install via `npm install -g reasonix`). Auth is the CLI's responsibility:
+# Reasonix accepts either $DEEPSEEK_API_KEY env var OR ~/.reasonix/config.json's
+# `apiKey` field (populated by the first-run wizard). The bridge does NOT
+# pre-check auth — same posture as the existing check 5 for Codex (which
+# doesn't pre-check OPENAI_API_KEY because `codex login` OAuth may be in use).
+if command -v reasonix >/dev/null 2>&1; then
+    if [ -n "${DEEPSEEK_API_KEY:-}" ]; then
+        record "DeepSeek bridging (optional)" ok "reasonix on PATH; DEEPSEEK_API_KEY set — deepseek-bridge invocations will dispatch with env-var auth"
+    elif [ -r "$HOME/.reasonix/config.json" ] && grep -q '"apiKey"' "$HOME/.reasonix/config.json" 2>/dev/null; then
+        record "DeepSeek bridging (optional)" ok "reasonix on PATH; ~/.reasonix/config.json contains an apiKey (from Reasonix's first-run wizard) — deepseek-bridge invocations will dispatch with config-file auth"
+    else
+        record "DeepSeek bridging (optional)" warn "reasonix CLI on PATH but no DeepSeek API key found (neither DEEPSEEK_API_KEY env nor ~/.reasonix/config.json apiKey). Reasonix's first-run wizard prompts for the key — run 'reasonix code' once to authenticate, OR set DEEPSEEK_API_KEY (get one at https://platform.deepseek.com/api_keys). The bridge surfaces missing-auth at invocation time as deepseek_subprocess_error, not at pre-flight" 0
+    fi
+else
+    record "DeepSeek bridging (optional)" warn "reasonix CLI not on PATH — deepseek-bridge invocations will BLOCK at pre-flight with reasonix_cli_not_installed. Install per https://github.com/esengine/DeepSeek-Reasonix (npm install -g reasonix, or use npx) if you want DeepSeek cross-vendor pairing" 0
+fi
+
+# ---- check 5c: codegraph (optional, v0.13+) ----
+# Codegraph is a tree-sitter-based MCP server that pre-indexes the repo into
+# a local SQLite knowledge graph. The LSP-first hook detects it via the
+# presence of .codegraph/codegraph.db at the project root and lists
+# codegraph's MCP tools alongside LSP in its redirect message. Fully optional;
+# absence is a no-op.
+if command -v codegraph >/dev/null 2>&1; then
+    if [ -r "$PROJECT_DIR/.codegraph/codegraph.db" ]; then
+        record "codegraph (optional)" ok "codegraph CLI on PATH; .codegraph/codegraph.db indexed for this project — the LSP-first hook will list codegraph_* tools alongside LSP in its redirect message"
+    else
+        record "codegraph (optional)" warn "codegraph CLI on PATH but project not indexed yet — run 'codegraph init -i' at the project root to build .codegraph/codegraph.db, then the LSP-first hook will start surfacing codegraph in its redirect message" 0
+    fi
+else
+    record "codegraph (optional)" warn "codegraph CLI not on PATH — codegraph is an optional structural-first alternative to LSP; the LSP-first hook silently falls back to LSP-only. See docs/howto-use-codegraph.md if you want to install it (npm i -g @colbymchenry/codegraph)" 0
+fi
+
+# ---- check 6: jq for the audit + probe tools ----
+if command -v jq >/dev/null 2>&1; then
+    record "jq (audit and probe tools)" ok "jq on PATH"
+else
+    record "jq (audit and probe tools)" warn "jq not on PATH — bin/code4me-audit-dispatch-log and bin/code4me-probe-run will error out. Install via 'brew install jq', 'apt install jq', or 'choco install jq'" 0
+fi
+
+# ---- check 7: OpenWolf integration (v0.10.1+) ----
+# OpenWolf is optional. The plugin works fully without it; if present, the
+# orchestrator reads cerebrum.md / anatomy.md / buglog.json for accumulated
+# user preferences, project shape, and prior-bug context.
+WOLF_DIR="$PROJECT_DIR/.wolf"
+if [ -d "$WOLF_DIR" ]; then
+    WOLF_FILES=""
+    for f in cerebrum.md anatomy.md buglog.json; do
+        if [ -r "$WOLF_DIR/$f" ]; then
+            WOLF_FILES="$WOLF_FILES$f, "
+        fi
+    done
+    if [ -n "$WOLF_FILES" ]; then
+        record "OpenWolf (optional)" ok "$WOLF_DIR/ present with: ${WOLF_FILES%, }"
+    else
+        record "OpenWolf (optional)" warn "$WOLF_DIR/ exists but no cerebrum.md / anatomy.md / buglog.json yet — orchestrator will silently skip OpenWolf reads until those files exist" 0
+    fi
+else
+    record "OpenWolf (optional)" warn "$WOLF_DIR/ not found — OpenWolf integration is off; the plugin works fully without it. If you want cerebrum-driven decision pre-deciding, install OpenWolf at the project root" 0
+fi
+
+# ---- check 7b: Trello sync (v0.10.3+) ----
+# Optional. Reports whether the .code4me/trello-config.json exists and points
+# at a plausibly-valid board. Does NOT probe the Trello MCP (no good way to do
+# that from a shell script without spawning Claude); the actual MCP availability
+# is checked at trello-sync skill invocation time.
+TRELLO_CONFIG="$PROJECT_DIR/.code4me/trello-config.json"
+if [ -r "$TRELLO_CONFIG" ]; then
+    if command -v jq >/dev/null 2>&1; then
+        BOARD_ID=$(jq -r '.board_id // empty' "$TRELLO_CONFIG" 2>/dev/null)
+        case "$BOARD_ID" in
+            ''|REPLACE_*)
+                record "Trello sync (optional)" warn "$TRELLO_CONFIG exists but board_id is empty or a placeholder — run /code4me-trello-init to populate, or remove the file to disable Trello sync entirely" 0
+                ;;
+            *)
+                # Count placeholder list_ids (those still set to a REPLACE_* string).
+                UNFILLED=$(jq -r '[.list_ids[]] | map(select(. != null and (startswith("REPLACE_")))) | length' "$TRELLO_CONFIG" 2>/dev/null || echo 6)
+                if [ "$UNFILLED" -gt 0 ]; then
+                    record "Trello sync (optional)" warn "$TRELLO_CONFIG has board_id set but $UNFILLED of 6 list_ids still placeholder — partial config; re-run /code4me-trello-init to finish" 0
+                else
+                    record "Trello sync (optional)" ok "$TRELLO_CONFIG configured (board $BOARD_ID, all 6 lists mapped)"
+                fi
+                ;;
+        esac
+    else
+        record "Trello sync (optional)" warn "$TRELLO_CONFIG exists but jq isn't on PATH to validate it" 0
+    fi
+else
+    record "Trello sync (optional)" warn "$TRELLO_CONFIG not found — Trello sync is off; trello-sync skill no-ops. Run /code4me-trello-init to enable" 0
+fi
+
+# ---- check 8: context-mode plugin (v0.10.1+) ----
+# Look for the context-mode plugin in the user's Claude Code plugin directory.
+# Optional — flagged as warn if absent.
+CONTEXT_MODE_DIR="$HOME/.claude/plugins/context-mode"
+if [ -d "$CONTEXT_MODE_DIR" ]; then
+    if [ -r "$CONTEXT_MODE_DIR/.claude-plugin/plugin.json" ]; then
+        CM_VERSION=$(jq -r '.version // "unknown"' "$CONTEXT_MODE_DIR/.claude-plugin/plugin.json" 2>/dev/null || echo "unparseable")
+        record "context-mode plugin (optional)" ok "installed at $CONTEXT_MODE_DIR (version $CM_VERSION)"
+    else
+        record "context-mode plugin (optional)" warn "$CONTEXT_MODE_DIR/ exists but no .claude-plugin/plugin.json — plugin may be partially installed or corrupted" 0
+    fi
+else
+    record "context-mode plugin (optional)" warn "not installed at $CONTEXT_MODE_DIR — flagged because you've asked preflight to check for it; install at that path if you want code4me to integrate" 0
+fi
+
+# ---- Critical-mode extra checks ----
+if [ "$MODE_CRITICAL" -eq 1 ]; then
+    # Critical-allowlist file (must exist for Critical, since orchestrator writes it on dispatch)
+    if [ -r "$PROJECT_DIR/.code4me/critical-allowlist.txt" ]; then
+        N=$(grep -cE '^[^#[:space:]]' "$PROJECT_DIR/.code4me/critical-allowlist.txt" 2>/dev/null || echo 0)
+        if [ "$N" -gt 0 ]; then
+            record "Critical-allowlist populated" ok "$PROJECT_DIR/.code4me/critical-allowlist.txt has $N path/glob entries"
+        else
+            record "Critical-allowlist populated" warn "$PROJECT_DIR/.code4me/critical-allowlist.txt exists but is empty — the hook will pass through silently"
+        fi
+    else
+        record "Critical-allowlist populated" warn "no .code4me/critical-allowlist.txt — orchestrator writes this at Critical dispatch; absent here means either no Critical milestone is in flight, or the orchestrator hasn't written it yet"
+    fi
+
+    # Hook script files exist on disk
+    for hook in check-test-protection check-forbidden-conditions check-critical-write-allowlist; do
+        if [ -x "$PLUGIN_ROOT/hooks/${hook}.sh" ]; then
+            : # silently OK; aggregate below
+        else
+            record "Hook script ${hook}.sh" fail "missing or not executable at $PLUGIN_ROOT/hooks/${hook}.sh — Critical dispatch's runtime defense-in-depth is degraded"
+        fi
+    done
+    # Single OK record if all three present
+    if [ -x "$PLUGIN_ROOT/hooks/check-test-protection.sh" ] && \
+       [ -x "$PLUGIN_ROOT/hooks/check-forbidden-conditions.sh" ] && \
+       [ -x "$PLUGIN_ROOT/hooks/check-critical-write-allowlist.sh" ]; then
+        record "Hook scripts on disk" ok "all three hook scripts present and executable in $PLUGIN_ROOT/hooks/"
+    fi
+fi
+
+# ---- emit report ----
+if [ "$QUIET" -eq 0 ]; then
+    printf '# code4me preflight\n\n'
+    printf '**Plugin:** `%s`  \n' "$PLUGIN_ROOT"
+    printf '**Project:** `%s`  \n' "$PROJECT_DIR"
+    printf '**Mode:** %s  \n' "$([ "$MODE_CRITICAL" -eq 1 ] && echo 'critical (extra checks enabled)' || echo 'standard')"
+    printf '**Run:** %s\n\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+    printf '| Check | Status | Detail |\n'
+    printf '|---|---|---|\n'
+    for i in "${!CHECK_NAMES[@]}"; do
+        case "${CHECK_STATUS[$i]}" in
+            ok)   icon='\xe2\x9c\x93 ok' ;;
+            warn) icon='\xe2\x9a\xa0 warn' ;;
+            fail) icon='\xe2\x9c\x97 FAIL' ;;
+            *)    icon='?' ;;
+        esac
+        printf '| %s | %b | %s |\n' "${CHECK_NAMES[$i]}" "$icon" "${CHECK_DETAIL[$i]}"
+    done
+    printf '\n'
+
+    printf '**Summary:** %d ok, %d warning, %d failed\n' "$OK_COUNT" "$WARN_COUNT" "$FAIL_COUNT"
+
+    if [ "$FAIL_COUNT" -gt 0 ]; then
+        printf '\n_Resolve the FAILed checks before dispatching. Warnings are advisory — they identify degraded capabilities (e.g., LSP off → subagents fall back to Read/Grep) rather than broken state._\n'
+    elif [ "$WARN_COUNT" -gt 0 ]; then
+        printf '\n_All required checks passed. Warnings are advisory — review each to decide whether to address before dispatching._\n'
+    else
+        printf '\n_All checks green._\n'
+    fi
+fi
+
+# ---- exit code ----
+# Fail only on actual fails (not warnings). --quiet doesn't change this; it
+# just suppresses the markdown output.
+if [ "$FAIL_COUNT" -gt 0 ]; then
+    exit 1
+fi
+exit 0

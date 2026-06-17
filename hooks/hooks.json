@@ -1,0 +1,26 @@
+{
+  "_comment": "Plugin-level hook registration. Auto-loaded on plugin-system installs (NOT path-referenced installs — for those, run bin/code4me-install to wire these into the project's .claude/settings.json). PreToolUse: LSP-first + buglog-helper redirects (both self-disable when their target artifact is absent). SessionStart: check-session-wiring is a read-only detector that nudges (never writes) when hook/.lsp.json paths can't resolve on this machine. The three opt-in write hooks (test-protection, forbidden-conditions, critical-write-allowlist) are wired via the project's settings.json, not here, because they depend on .code4me/ state files the user may not always want written.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Grep|mcp__plugin_context-mode_context-mode__ctx_execute|mcp__plugin_context-mode_context-mode__ctx_execute_file|mcp__plugin_context-mode_context-mode__ctx_batch_execute",
+        "hooks": [
+          { "type": "command", "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/check-lsp-first-on-source.sh" }
+        ]
+      },
+      {
+        "matcher": "Read|Grep|Edit|Write|MultiEdit|Bash",
+        "hooks": [
+          { "type": "command", "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/check-buglog-helper.sh" }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/check-session-wiring.sh" }
+        ]
+      }
+    ]
+  }
+}

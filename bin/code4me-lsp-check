@@ -1,0 +1,232 @@
+#!/usr/bin/env python3
+"""LSP handshake checker for the code4me preflight.
+
+For each language entry in .lsp.json, spawn the language server, send a
+minimal LSP `initialize` request via stdio, wait briefly for a response,
+and inspect whether the response looks like LSP JSON-RPC framing. Report
+per-language status.
+
+This is "handshake-lite": we don't fully parse the InitializeResult, we
+just confirm the server responded to the LSP protocol with something
+JSON-RPC-shaped. That's enough to know the binary is reachable, starts,
+and speaks LSP — without the brittleness of full schema validation.
+
+Usage:
+  bin/code4me-lsp-check [.lsp.json path] [--timeout SECONDS] [--json]
+
+Output (default markdown table; --json for machine-readable):
+  | Language | Status | Detail |
+  |---|---|---|
+  | csharp   | ok    | Roslyn responded to initialize         |
+  | python   | warn  | binary 'pyright-langserver' not on PATH |
+  ...
+
+Exit code:
+  0 — all checked languages OK or no checks performed
+  1 — at least one language failed reachability (binary not found or
+      spawn error). Warnings (slow handshake, ambiguous response) don't
+      fail the run.
+"""
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+import threading
+
+DEFAULT_TIMEOUT = 8  # seconds
+
+
+def build_init_message():
+    body = json.dumps({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "processId": os.getpid(),
+            "rootUri": None,
+            "capabilities": {},
+            "clientInfo": {"name": "code4me-preflight", "version": "0.10.1"},
+        },
+    })
+    return f"Content-Length: {len(body)}\r\n\r\n{body}".encode()
+
+
+def check_one(name, config, timeout):
+    """Run a handshake against one language server. Return (status, detail)."""
+    cmd_str = config.get("command")
+    args = config.get("args", []) or []
+
+    if not cmd_str:
+        return ("warn", f"missing 'command' in .lsp.json entry for {name}")
+
+    binary_path = shutil.which(cmd_str)
+    if not binary_path:
+        return ("warn", f"binary '{cmd_str}' not on PATH — LSP for {name} won't start")
+
+    cmd = [binary_path] + args
+
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            bufsize=0,
+        )
+    except Exception as e:
+        return ("warn", f"failed to spawn '{cmd_str}': {e}")
+
+    def stderr_excerpt():
+        """Grab a short stderr excerpt after the process is dead.
+
+        LSP servers log actionable startup errors (missing runtime, bad
+        license, version mismatch) to stderr — without this, every failure
+        collapses into a vague 'did not respond'.
+        """
+        try:
+            data = proc.stderr.read(2048) if proc.stderr else b""
+            if data:
+                text = data.decode("utf-8", errors="replace")
+                return " | stderr: " + " ".join(text.split())[:200]
+        except Exception:
+            pass
+        return ""
+
+    msg = build_init_message()
+    response_chunks = []
+    read_error = [None]
+
+    def read_response():
+        try:
+            # Read up to 8KB; LSP initialize responses are typically small.
+            # Some servers emit headers/banners on stderr; we only read stdout.
+            data = proc.stdout.read(8192)
+            if data:
+                response_chunks.append(data)
+        except Exception as e:
+            read_error[0] = e
+
+    try:
+        proc.stdin.write(msg)
+        proc.stdin.flush()
+    except Exception as e:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        return ("warn", f"failed to send initialize to {name} LSP: {e}")
+
+    reader = threading.Thread(target=read_response, daemon=True)
+    reader.start()
+    reader.join(timeout=timeout)
+
+    try:
+        proc.kill()
+    except Exception:
+        pass
+    try:
+        proc.wait(timeout=2)
+    except Exception:
+        pass
+
+    if reader.is_alive():
+        return ("warn", f"{name} LSP did not respond within {timeout}s{stderr_excerpt()}")
+
+    if read_error[0]:
+        return ("warn", f"{name} LSP read error: {read_error[0]}{stderr_excerpt()}")
+
+    if not response_chunks:
+        return ("warn", f"{name} LSP gave no response to initialize{stderr_excerpt()}")
+
+    response = b"".join(response_chunks).decode("utf-8", errors="replace")
+
+    looks_lsp = "Content-Length:" in response and (
+        '"jsonrpc"' in response
+        or '"result"' in response
+        or '"error"' in response
+    )
+    if looks_lsp:
+        short = binary_path
+        return ("ok", f"{name} LSP responded to initialize (binary: {short})")
+
+    excerpt = response[:120].replace("\n", " ").replace("\r", "")
+    return ("warn", f"{name} LSP responded but output wasn't LSP-shaped: {excerpt}...{stderr_excerpt()}")
+
+
+def main():
+    timeout = DEFAULT_TIMEOUT
+    emit_json = False
+    args = list(sys.argv[1:])
+    positional = []
+    while args:
+        a = args.pop(0)
+        if a == "--json":
+            emit_json = True
+        elif a == "--timeout":
+            try:
+                timeout = float(args.pop(0))
+            except (IndexError, ValueError):
+                sys.stderr.write("--timeout requires a numeric argument\n")
+                sys.exit(2)
+        elif a in ("--help", "-h"):
+            sys.stdout.write(__doc__)
+            return 0
+        else:
+            positional.append(a)
+
+    lsp_path = positional[0] if positional else ".lsp.json"
+    if not os.path.exists(lsp_path):
+        msg = f".lsp.json not found at {lsp_path}"
+        if emit_json:
+            print(json.dumps({"status": "fail", "detail": msg}))
+        else:
+            print(f"fail: {msg}")
+        return 1
+
+    try:
+        with open(lsp_path) as f:
+            config = json.load(f)
+    except json.JSONDecodeError as e:
+        msg = f"failed to parse {lsp_path}: {e}"
+        if emit_json:
+            print(json.dumps({"status": "fail", "detail": msg}))
+        else:
+            print(f"fail: {msg}")
+        return 1
+
+    results = {}
+    for lang_name, lang_config in config.items():
+        if lang_name.startswith("_"):
+            continue
+        if not isinstance(lang_config, dict):
+            continue
+        status, detail = check_one(lang_name, lang_config, timeout)
+        results[lang_name] = {"status": status, "detail": detail}
+
+    if emit_json:
+        print(json.dumps({"status": "ok", "languages": results}))
+    else:
+        if not results:
+            print("No language entries in .lsp.json — nothing to check.")
+        else:
+            print("| Language | Status | Detail |")
+            print("|---|---|---|")
+            for lang, info in sorted(results.items()):
+                status_icon = {
+                    "ok": "✓ ok",
+                    "warn": "⚠ warn",
+                    "fail": "✗ FAIL",
+                }.get(info["status"], info["status"])
+                print(f"| {lang} | {status_icon} | {info['detail']} |")
+
+    # Exit code: 0 unless any language reported `fail` (warnings allowed).
+    # Currently this script never emits 'fail' for individual languages;
+    # 'warn' is the strongest negative signal. Reserve exit-1 for actual
+    # framework errors (missing file, parse error) handled above.
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

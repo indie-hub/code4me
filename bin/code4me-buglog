@@ -1,0 +1,434 @@
+#!/usr/bin/env python3
+"""code4me-buglog - token-cheap inspector/editor for OpenWolf's .wolf/buglog.json.
+
+OpenWolf instructs the agent to "read .wolf/buglog.json before fixing" and append
+after. That file grows without bound (hundreds of entries, ~100k tokens), so the
+"read the whole file" consult path is enormously wasteful. This tool replaces it:
+query for the 1-3 relevant entries (hundreds of tokens), and update/append a single
+entry by id - without ever loading the whole log into an LLM context.
+
+It is byte-compatible with OpenWolf's own writer (hooks/post-write.js):
+  * shape {"version": 1, "bugs": [...]}
+  * JSON dumped with indent=2, non-ASCII left as UTF-8 (ensure_ascii=False),
+    no trailing newline  -> matches JSON.stringify(data, null, 2)
+  * ids "bug-NNN" zero-padded to >=3 digits
+  * recurrence handled by bumping `occurrences` + `last_seen`, not duplicating
+Atomic write (tmp + os.replace); a single rolling .bak is kept unless --no-backup.
+
+Pure stdlib (json, argparse, difflib, datetime, os). Python 3.8+.
+
+Subcommands: search | get | stats | add | update | doctor
+Default --buglog is .wolf/buglog.json relative to the current directory (project
+root, the same place OpenWolf looks).
+"""
+import argparse
+import difflib
+import json
+import os
+import sys
+from datetime import datetime, timezone
+
+
+def die(msg, code=2):
+    sys.stderr.write("code4me-buglog: " + msg + "\n")
+    sys.exit(code)
+
+
+def now_iso():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def load(path):
+    if not os.path.isfile(path):
+        die("buglog not found: " + path + " (default is .wolf/buglog.json; pass --buglog)")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except json.JSONDecodeError as exc:
+        die("buglog is not valid JSON: " + str(exc))
+    if not isinstance(data, dict) or not isinstance(data.get("bugs"), list):
+        die("buglog must be an object with a 'bugs' array (shape {version, bugs:[]})")
+    data.setdefault("version", 1)
+    return data
+
+
+def dump_text(data):
+    # Match OpenWolf's JSON.stringify(data, null, 2): 2-space indent, UTF-8
+    # literals (not \\uXXXX), no trailing newline.
+    return json.dumps(data, indent=2, ensure_ascii=False)
+
+
+def save(path, data, backup=True):
+    if backup and os.path.isfile(path):
+        try:
+            with open(path, encoding="utf-8") as src, open(path + ".bak", "w", encoding="utf-8") as dst:
+                dst.write(src.read())
+        except OSError:
+            pass  # backup is best-effort; never block the write
+    tmp = path + "." + str(os.getpid()) + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        fh.write(dump_text(data))
+    os.replace(tmp, path)  # atomic on same filesystem (incl. Windows)
+
+
+def numeric_id(bug):
+    raw = str(bug.get("id", "")).rsplit("-", 1)[-1]
+    return int(raw) if raw.isdigit() else 0
+
+
+def next_id(bugs):
+    n = max((numeric_id(b) for b in bugs), default=0) + 1
+    return "bug-" + format(n, "03d")
+
+
+def find_all_by_id(bugs, bug_id):
+    return [b for b in bugs if b.get("id") == bug_id]
+
+
+def resolve_one(bugs, bug_id):
+    """Return the single entry with bug_id, or die on missing/ambiguous."""
+    matches = find_all_by_id(bugs, bug_id)
+    if not matches:
+        die("no such bug id: " + bug_id, code=1)
+    if len(matches) > 1:
+        die("ambiguous id " + bug_id + ": " + str(len(matches)) + " entries share it. "
+            "Run 'doctor --fix-ids' to make ids unique, or 'search --id " + bug_id + "' to inspect.",
+            code=1)
+    return matches[0]
+
+
+def basename(p):
+    return os.path.basename(str(p).replace("\\", "/").rstrip("/"))
+
+
+def normalize(s):
+    return " ".join(str(s).lower().split())
+
+
+def parse_since(spec):
+    """Accept an ISO date/datetime or a relative Nd/Nh/Nm/Ns; return epoch secs."""
+    if spec is None:
+        return None
+    s = spec.strip()
+    if s and s[-1] in "smhd" and s[:-1].isdigit():
+        mult = {"s": 1, "m": 60, "h": 3600, "d": 86400}[s[-1]]
+        return datetime.now(timezone.utc).timestamp() - int(s[:-1]) * mult
+    for fmt in ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(s, fmt).replace(tzinfo=timezone.utc).timestamp()
+        except ValueError:
+            continue
+    die("bad --since value: " + repr(spec) + " (use ISO date or Nd/Nh/Nm/Ns)")
+
+
+def entry_epoch(bug):
+    for key in ("last_seen", "timestamp"):
+        v = bug.get(key)
+        if not v:
+            continue
+        for fmt in ("%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S"):
+            try:
+                return datetime.strptime(v, fmt).replace(tzinfo=timezone.utc).timestamp()
+            except ValueError:
+                continue
+    return 0.0
+
+
+def cmd_search(data, args):
+    bugs = data["bugs"]
+    since = parse_since(args.since)
+    err = normalize(args.error) if args.error else None
+    fil = args.file.lower() if args.file else None
+    matched = []
+    for b in bugs:
+        if args.id and b.get("id") != args.id:
+            continue
+        if args.tag and args.tag not in b.get("tags", []):
+            continue
+        if args.min_occurrences and b.get("occurrences", 1) < args.min_occurrences:
+            continue
+        if since is not None and entry_epoch(b) < since:
+            continue
+        if fil and fil not in str(b.get("file", "")).lower():
+            continue
+        if err:
+            hay = normalize(" ".join(str(b.get(k, "")) for k in ("error_message", "root_cause", "fix")))
+            if err not in hay:
+                continue
+        matched.append(b)
+
+    matched.sort(key=entry_epoch, reverse=True)
+    if args.limit and args.limit > 0:
+        matched = matched[: args.limit]
+
+    if args.count:
+        print(len(matched))
+        return
+    if args.full:
+        print(dump_text(matched))
+        return
+    for b in matched:
+        err_msg = " ".join(str(b.get("error_message", "")).split())
+        if len(err_msg) > 110:
+            err_msg = err_msg[:107] + "..."
+        occ = b.get("occurrences", 1)
+        occ_s = (" x" + str(occ)) if occ and occ > 1 else ""
+        tags = ",".join(b.get("tags", [])[:4])
+        print("{:10}{:5} [{}] {}".format(b.get("id", "?"), occ_s, tags, err_msg))
+    if not matched:
+        sys.stderr.write("(no matching bugs)\n")
+
+
+def cmd_get(data, args):
+    b = resolve_one(data["bugs"], args.id)
+    if args.field:
+        if args.field not in b:
+            die("bug " + args.id + " has no field " + repr(args.field), code=1)
+        val = b[args.field]
+        print(val if isinstance(val, str) else json.dumps(val, ensure_ascii=False))
+    else:
+        print(json.dumps(b, indent=2, ensure_ascii=False))
+
+
+def cmd_stats(data, args):
+    bugs = data["bugs"]
+    n = len(bugs)
+    raw = dump_text(data)
+    tags, files, recurring = {}, {}, []
+    for b in bugs:
+        for t in b.get("tags", []):
+            tags[t] = tags.get(t, 0) + 1
+        f = basename(b.get("file", ""))
+        files[f] = files.get(f, 0) + 1
+        if b.get("occurrences", 1) > 1:
+            recurring.append(b)
+    top = args.top
+    print("entries: " + str(n))
+    print("file size: " + str(len(raw)) + " chars (~" + str(len(raw) // 4) + " tokens to read whole)")
+    print("recurring (occurrences>1): " + str(len(recurring)))
+    print("\ntop " + str(top) + " recurring:")
+    for b in sorted(recurring, key=lambda x: -x.get("occurrences", 1))[:top]:
+        em = " ".join(str(b.get("error_message", "")).split())[:80]
+        print("  {:10} x{:<3} {}".format(b["id"], b.get("occurrences", 1), em))
+    print("\ntop " + str(top) + " tags:")
+    for t, c in sorted(tags.items(), key=lambda x: -x[1])[:top]:
+        print("  {:5}  {}".format(c, t))
+    print("\ntop " + str(top) + " file hotspots:")
+    for f, c in sorted(files.items(), key=lambda x: -x[1])[:top]:
+        print("  {:5}  {}".format(c, f))
+
+
+def cmd_add(data, args):
+    bugs = data["bugs"]
+    new_base = basename(args.file)
+    new_err = normalize(args.error)
+    dupe = None
+    if not args.no_dedup and not args.force_new:
+        for b in bugs:
+            if basename(b.get("file", "")) != new_base:
+                continue
+            existing = normalize(b.get("error_message", ""))
+            ratio = difflib.SequenceMatcher(None, existing, new_err).ratio()
+            if existing == new_err or ratio >= 0.85:
+                dupe = b
+                break
+    if dupe is not None:
+        dupe["occurrences"] = dupe.get("occurrences", 1) + 1
+        dupe["last_seen"] = now_iso()
+        for t in args.tag or []:
+            if t not in dupe.setdefault("tags", []):
+                dupe["tags"].append(t)
+        save(args.buglog, data, backup=not args.no_backup)
+        print("deduped into " + dupe["id"] + " (occurrences now " + str(dupe["occurrences"]) + ")")
+        return
+    bug_id = next_id(bugs)
+    ts = now_iso()
+    bugs.append({
+        "id": bug_id,
+        "timestamp": ts,
+        "error_message": args.error,
+        "file": args.file,
+        "root_cause": args.root_cause or "",
+        "fix": args.fix or "",
+        "tags": list(dict.fromkeys(args.tag or [])),
+        "related_bugs": list(dict.fromkeys(args.related or [])),
+        "occurrences": 1,
+        "last_seen": ts,
+    })
+    save(args.buglog, data, backup=not args.no_backup)
+    print("added " + bug_id)
+
+
+def cmd_update(data, args):
+    b = resolve_one(data["bugs"], args.id)
+    changed = []
+    for attr, key in (("error", "error_message"), ("file", "file"),
+                      ("root_cause", "root_cause"), ("fix", "fix"),
+                      ("resolution", "resolution")):
+        val = getattr(args, attr)
+        if val is not None:
+            b[key] = val
+            changed.append(key)
+    if args.add_tag:
+        tags = b.setdefault("tags", [])
+        for t in args.add_tag:
+            if t not in tags:
+                tags.append(t)
+                changed.append("+tag:" + t)
+    if args.remove_tag:
+        tags = b.setdefault("tags", [])
+        for t in args.remove_tag:
+            if t in tags:
+                tags.remove(t)
+                changed.append("-tag:" + t)
+    if args.add_related:
+        rel = b.setdefault("related_bugs", [])
+        for r in args.add_related:
+            if r not in rel:
+                rel.append(r)
+                changed.append("+related:" + r)
+    if args.occurrences is not None:
+        b["occurrences"] = args.occurrences
+        changed.append("occurrences")
+    if args.bump:
+        b["occurrences"] = b.get("occurrences", 1) + 1
+        b["last_seen"] = now_iso()
+        changed.append("bump")
+    elif args.touch:
+        b["last_seen"] = now_iso()
+        changed.append("touch")
+    if not changed:
+        die("update: nothing to change (pass at least one field flag)", code=1)
+    save(args.buglog, data, backup=not args.no_backup)
+    print("updated " + args.id + ": " + ", ".join(changed))
+
+
+REQUIRED_FIELDS = ("id", "timestamp", "error_message", "file", "root_cause",
+                   "fix", "tags", "related_bugs", "occurrences", "last_seen")
+
+
+def cmd_doctor(data, args):
+    bugs = data["bugs"]
+    ids = [b.get("id") for b in bugs]
+    counts = {}
+    for i in ids:
+        counts[i] = counts.get(i, 0) + 1
+    dups = {i: c for i, c in counts.items() if c > 1}
+    known = set(ids)
+    missing = [(b.get("id", "?"), [k for k in REQUIRED_FIELDS if k not in b])
+               for b in bugs if any(k not in b for k in REQUIRED_FIELDS)]
+    broken_rel = [(b.get("id"), r) for b in bugs
+                  for r in b.get("related_bugs", []) if r not in known]
+
+    print("entries: " + str(len(bugs)) + " | distinct ids: " + str(len(known)))
+    print("duplicate ids: " + str(len(dups)))
+    for i, c in sorted(dups.items()):
+        print("  " + str(i) + " x" + str(c))
+    print("entries missing required fields: " + str(len(missing)))
+    for bid, miss in missing[:20]:
+        print("  " + str(bid) + ": missing " + str(miss))
+    print("related_bugs -> unknown id: " + str(len(broken_rel)))
+    for bid, r in broken_rel[:20]:
+        print("  " + str(bid) + " -> " + str(r))
+
+    if not args.fix_ids:
+        if dups:
+            print("\nrun 'doctor --fix-ids' to reassign duplicate ids to fresh unique ones "
+                  "(keeps the first occurrence, renames later ones; writes a .bak first).")
+        return
+    if not dups:
+        print("\nno duplicate ids to fix.")
+        return
+    next_n = max((numeric_id(b) for b in bugs), default=0) + 1
+    seen, reassigned = set(), []
+    for b in bugs:
+        bid = b.get("id")
+        if bid in dups:
+            if bid in seen:
+                new = "bug-" + format(next_n, "03d")
+                next_n += 1
+                b["id"] = new
+                reassigned.append((bid, new))
+            else:
+                seen.add(bid)
+    save(args.buglog, data, backup=not args.no_backup)
+    print("\nreassigned " + str(len(reassigned)) + " duplicate-id entries (first occurrence kept):")
+    for old, new in reassigned:
+        print("  " + old + " -> " + new)
+    print("note: related_bugs references were left as-is (they were already ambiguous); "
+          "review with 'doctor' if any now point to a renamed entry.")
+
+
+def build_parser():
+    p = argparse.ArgumentParser(prog="code4me-buglog", description=__doc__,
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--buglog", default=os.path.join(".wolf", "buglog.json"),
+                   help="path to buglog.json (default: .wolf/buglog.json)")
+    p.add_argument("--no-backup", action="store_true",
+                   help="do not write a .bak before mutating")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    s = sub.add_parser("search", help="filter entries (token-cheap)")
+    s.add_argument("--error")
+    s.add_argument("--tag")
+    s.add_argument("--file")
+    s.add_argument("--since")
+    s.add_argument("--id")
+    s.add_argument("--min-occurrences", type=int)
+    s.add_argument("--limit", type=int, default=20)
+    grp = s.add_mutually_exclusive_group()
+    grp.add_argument("--oneline", action="store_true")
+    grp.add_argument("--full", action="store_true")
+    grp.add_argument("--count", action="store_true")
+    s.set_defaults(func=cmd_search)
+
+    g2 = sub.add_parser("get", help="print one entry by id")
+    g2.add_argument("id")
+    g2.add_argument("--field", help="print only this field")
+    g2.set_defaults(func=cmd_get)
+
+    st = sub.add_parser("stats", help="overview without reading the whole file")
+    st.add_argument("--top", type=int, default=10)
+    st.set_defaults(func=cmd_stats)
+
+    a = sub.add_parser("add", help="append a bug (dedup-aware)")
+    a.add_argument("--error", required=True)
+    a.add_argument("--file", required=True)
+    a.add_argument("--root-cause", dest="root_cause")
+    a.add_argument("--fix")
+    a.add_argument("--tag", action="append")
+    a.add_argument("--related", action="append")
+    a.add_argument("--force-new", action="store_true", help="skip dedup, always create")
+    a.add_argument("--no-dedup", action="store_true")
+    a.set_defaults(func=cmd_add)
+
+    u = sub.add_parser("update", help="edit one entry by id")
+    u.add_argument("id")
+    u.add_argument("--error")
+    u.add_argument("--file")
+    u.add_argument("--root-cause", dest="root_cause")
+    u.add_argument("--fix")
+    u.add_argument("--resolution")
+    u.add_argument("--add-tag", action="append")
+    u.add_argument("--remove-tag", action="append")
+    u.add_argument("--add-related", action="append")
+    u.add_argument("--bump", action="store_true", help="occurrences +1, last_seen=now")
+    u.add_argument("--touch", action="store_true", help="last_seen=now")
+    u.add_argument("--occurrences", type=int, help="set occurrences explicitly")
+    u.set_defaults(func=cmd_update)
+
+    d = sub.add_parser("doctor", help="report integrity issues (duplicate ids, broken refs)")
+    d.add_argument("--fix-ids", dest="fix_ids", action="store_true",
+                   help="reassign duplicate ids to fresh unique ones")
+    d.set_defaults(func=cmd_doctor)
+    return p
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
+    data = load(args.buglog)
+    args.func(data, args)
+
+
+if __name__ == "__main__":
+    main()

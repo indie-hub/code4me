@@ -1,0 +1,38 @@
+# Regression budget for the code4me probe suite.
+#
+# Configures how many probes are allowed to flip outcomes between runs
+# before the suite is considered regressed. Used by bin/code4me-probe-run
+# when invoked without an explicit --max-flips override.
+#
+# A "flip" is a probe whose latest outcome (pass | partial | fail) differs
+# from its baseline outcome recorded in probes/baseline.jsonl. The CLI flag
+# --max-flips=N overrides the value here.
+#
+# Why a budget instead of zero-tolerance:
+# - LLM-as-judge calls have measurable variance run-to-run even when nothing
+#   has actually moved. A non-zero budget absorbs that.
+# - When framework changes are deliberate (a probe's Expected block updates
+#   to reflect new behaviour), the user re-baselines.
+# - When unintended regressions land, the budget firing is a halt-and-look
+#   signal — not an automatic accept.
+#
+# Tune this to your tolerance. Hamel Husain's eval-discipline argument
+# applies: if you're never tripping the budget, the budget is too generous;
+# if it trips every run, something is genuinely unstable (or the budget is
+# too tight).
+
+# Maximum number of probe outcome flips allowed before the suite is
+# considered regressed. The runner exits non-zero if flips exceed this.
+# Zero means "no flips allowed" (strict mode).
+max_flips = 3
+
+# Whether to count probes whose verdict is "skip" or "error" toward the
+# flip budget. Default behaviour treats them as "no signal" and excludes
+# them. Set true if you want the budget to penalise skipped or errored
+# runs the same as actual flips.
+count_skips = false
+count_errors = false
+
+# Path to the baseline file (relative to plugin root). Override at the
+# CLI with --baseline=path.
+baseline = "probes/baseline.jsonl"

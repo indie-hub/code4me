@@ -1,0 +1,66 @@
+{
+  "_destination": "Copy this file to your project's root as `.lsp.json` (no .example suffix). Then replace <PLUGIN_DIR> in the cpp.args entry with the absolute path to the code4me plugin's checkout. The other entries (csharp, swift) auto-resolve via PATH and need no edits.",
+
+  "_notes_per_platform": {
+    "windows": "Use forward slashes in <PLUGIN_DIR> even on Windows; Node accepts them. Roslyn ships as roslyn-language-server.cmd on Windows; the entry below uses the unsuffixed form which works with Git for Windows' bash shim.",
+    "macos": "On macOS, xcrun resolves sourcekit-lsp from the active Xcode toolchain. If you use only the Command Line Tools, ensure they're selected (xcode-select -p). clangd is provided by Homebrew (brew install llvm) or Xcode; the proxy works with either as long as `clangd` is on PATH (CLANGD_REAL_PATH env var overrides).",
+    "linux": "On Linux, install Roslyn via `dotnet tool install --global roslyn-language-server --prerelease` and ensure ~/.dotnet/tools is on PATH. Swift LSP requires Swift toolchain; the `xcrun` wrapper doesn't exist on Linux — replace the swift.command with `sourcekit-lsp` directly. clangd from apt/dnf or upstream LLVM binaries."
+  },
+
+  "csharp": {
+    "command": "roslyn-language-server",
+    "args": [
+      "--stdio",
+      "--autoLoadProjects",
+      "--logLevel", "Information",
+      "--extensionLogDirectory", ".code4me/lsp-logs"
+    ],
+    "transport": "stdio",
+    "extensionToLanguage": {
+      ".cs": "csharp",
+      ".csx": "csharp",
+      ".cshtml": "csharp"
+    },
+    "initializationOptions": {},
+    "settings": {},
+    "startupTimeout": 120000
+  },
+
+  "swift": {
+    "command": "xcrun",
+    "args": ["sourcekit-lsp"],
+    "transport": "stdio",
+    "extensionToLanguage": {
+      ".swift": "swift"
+    },
+    "initializationOptions": {},
+    "settings": {},
+    "startupTimeout": 60000
+  },
+
+  "cpp": {
+    "_comment": "Uses the clangd-didopen-proxy.mjs shipped with the plugin to work around Claude Code CLI bug anthropics/claude-code#29501. Replace <PLUGIN_DIR> below with the absolute path to your code4me plugin checkout. On a default Claude Code plugin install, this is typically ~/.claude/plugins/cache/code4me/<version>/ — check `installed_plugins.json` for the exact path. Set CLANGD_REAL_PATH env var to override the spawned clangd binary if it's not on PATH.",
+    "command": "node",
+    "args": [
+      "<PLUGIN_DIR>/bin/clangd-didopen-proxy.mjs",
+      "--background-index",
+      "--clang-tidy"
+    ],
+    "transport": "stdio",
+    "extensionToLanguage": {
+      ".cpp": "cpp",
+      ".cxx": "cpp",
+      ".cc": "cpp",
+      ".c++": "cpp",
+      ".hpp": "cpp",
+      ".hxx": "cpp",
+      ".hh": "cpp",
+      ".h++": "cpp",
+      ".h": "cpp",
+      ".c": "c"
+    },
+    "initializationOptions": {},
+    "settings": {},
+    "startupTimeout": 60000
+  }
+}
