@@ -150,11 +150,16 @@ else
     record "LSP enabled" warn "ENABLE_LSP_TOOL=1 not in env or settings.json — LSP-backed tooling is off; subagents fall back to Read/Grep (more context-expensive)"
 fi
 
-# ---- check 4: .lsp.json present in plugin ----
+# ---- check 4: plugin-root .lsp.json (dev-checkout only; NOT shipped) ----
+# This file is .gitignored and only exists in a dev checkout where it was
+# generated locally. On a marketplace/cache install it is deliberately absent —
+# the PROJECT's own .lsp.json (check 4-proj below) is what LSP actually uses, and
+# the shipped template is templates/project-starter/.lsp.json.example. So absence
+# here is informational, never a failure.
 if [ -r "$PLUGIN_ROOT/.lsp.json" ]; then
-    record "Plugin LSP configurations" ok "found $PLUGIN_ROOT/.lsp.json"
+    record "Plugin-root .lsp.json (dev only)" ok "found $PLUGIN_ROOT/.lsp.json (dev checkout)"
 else
-    record "Plugin LSP configurations" fail "no .lsp.json at plugin root ($PLUGIN_ROOT)"
+    record "Plugin-root .lsp.json (dev only)" warn "absent at plugin root — expected on a marketplace/cache install. The project .lsp.json (below) is authoritative; the shipped template is templates/project-starter/.lsp.json.example. Run bin/code4me-install to generate a project .lsp.json." 0
 fi
 
 # ---- check 4-proj: project .lsp.json is valid + declared paths resolve (v0.13.1+) ----
@@ -179,8 +184,17 @@ fi
 # check for a JSON-RPC-shaped response. Uses bin/code4me-lsp-check (Python).
 # Each language reports separately so a single broken server doesn't drown
 # out the working ones.
-if [ -r "$PLUGIN_ROOT/.lsp.json" ] && [ -x "$PLUGIN_ROOT/bin/code4me-lsp-check" ] && command -v python3 >/dev/null 2>&1; then
-    LSP_JSON_OUTPUT=$(python3 "$PLUGIN_ROOT/bin/code4me-lsp-check" --json --timeout 8 "$PLUGIN_ROOT/.lsp.json" 2>/dev/null || echo '{"status":"fail"}')
+# Prefer the PROJECT .lsp.json (what LSP actually uses, and the only one that
+# exists on a marketplace/cache install); fall back to the plugin-root file in a
+# dev checkout.
+LSP_PROBE_TARGET=""
+if [ -r "$PROJECT_DIR/.lsp.json" ]; then
+    LSP_PROBE_TARGET="$PROJECT_DIR/.lsp.json"
+elif [ -r "$PLUGIN_ROOT/.lsp.json" ]; then
+    LSP_PROBE_TARGET="$PLUGIN_ROOT/.lsp.json"
+fi
+if [ -n "$LSP_PROBE_TARGET" ] && [ -x "$PLUGIN_ROOT/bin/code4me-lsp-check" ] && command -v python3 >/dev/null 2>&1; then
+    LSP_JSON_OUTPUT=$(python3 "$PLUGIN_ROOT/bin/code4me-lsp-check" --json --timeout 8 "$LSP_PROBE_TARGET" 2>/dev/null || echo '{"status":"fail"}')
     LSP_OVERALL=$(printf '%s' "$LSP_JSON_OUTPUT" | jq -r '.status' 2>/dev/null)
     if [ "$LSP_OVERALL" = "ok" ]; then
         # Parse per-language and add a record each.
