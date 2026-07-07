@@ -65,7 +65,7 @@ eq "windows: lowercased"          "$(C4M_FORCE_WINDOWS=1 c4m_fold 'C:/Proj/SRC')
 
 # run_hook <hook-file> <tool_name> <file_path>  -> prints hook stdout
 run_hook() {
-    jq -n --arg t "$2" --arg p "$3" '{tool_name:$t, tool_input:{file_path:$p}}' \
+    MSYS2_ARG_CONV_EXCL='*' jq -n --arg t "$2" --arg p "$3" '{tool_name:$t, tool_input:{file_path:$p}}' \
         | bash "$HOOKS_DIR/$1"
 }
 # assert <desc> <pass|ask> <hook-output>
