@@ -4,7 +4,14 @@ All notable changes to this plugin will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.13.2-dev] — in progress
+## [0.13.3-dev] — in progress
+
+### Fixed
+
+- Codex plugin install now accepts bundled hook config: removed non-schema metadata fields from `hooks/hooks.json` and the Codex hooks template.
+- Bumped plugin manifests to avoid Codex reusing a cached `0.13.2-dev` install.
+
+## [0.13.2-dev]
 
 ### Added
 

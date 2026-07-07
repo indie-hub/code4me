@@ -1,6 +1,4 @@
 {
-  "_destination": "Copy to <project>/.codex/hooks.json, replace <PLUGIN_DIR> with this checkout's absolute path, then run /hooks in Codex to review/trust project hooks.",
-  "_note": "Codex hooks are command hooks. This template mirrors the Claude write-protection hooks where Codex exposes compatible tool payloads, and keeps the structural-first hook in front of source-code reads/searches.",
   "hooks": {
     "PreToolUse": [
       {

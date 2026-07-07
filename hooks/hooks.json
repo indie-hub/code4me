@@ -1,5 +1,4 @@
 {
-  "_comment": "Plugin-level hook registration. Auto-loaded on plugin-system installs (NOT path-referenced installs — for those, run bin/code4me-install to wire these into the project's .claude/settings.json). PreToolUse: structural-first redirects keep Read/Grep/context-mode from jumping ahead of codegraph or CocoIndex for source-code lookup. SessionStart: check-session-wiring is a read-only detector that nudges (never writes) when hook paths can't resolve on this machine. The three opt-in write hooks (test-protection, forbidden-conditions, critical-write-allowlist) are wired via the project's settings.json, not here, because they depend on .code4me/ state files the user may not always want written.",
   "hooks": {
     "PreToolUse": [
       {

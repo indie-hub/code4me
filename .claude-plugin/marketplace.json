@@ -9,7 +9,7 @@
       "name": "code4me",
       "source": "./",
       "description": "Multi-agent SDLC orchestrator: classifies workflow weight (Trivial/Conversation/Light/Standard/Critical), dispatches specialist subagents, enforces quality gates + auto-escalation, with opt-in cross-vendor pairing (Anthropic + OpenAI + DeepSeek), runtime PreToolUse hooks, structural-index-first consultation, and the audit4me codebase auditor.",
-      "version": "0.13.2-dev",
+      "version": "0.13.3-dev",
       "author": {
         "name": "Bruno"
       },
