@@ -82,6 +82,8 @@ printf 'src/auth/**\ntests/**\n'                 > "$PROOT/.code4me/critical-all
 printf 'tests/**\n'                              > "$PROOT/.code4me/protected-tests.txt"
 printf '{"forbidden_globs":["migrations/**","schema/*.sql"]}\n' > "$PROOT/.code4me/forbidden-conditions.json"
 
+export C4M_FORCE_WINDOWS=0
+
 echo "== e2e POSIX: critical-write-allowlist =="
 out="$(CLAUDE_PROJECT_DIR="$PROOT" run_hook check-critical-write-allowlist.sh Edit "$PROOT/src/auth/Login.cs")";   assert "in-scope edit"      pass "$out"
 out="$(CLAUDE_PROJECT_DIR="$PROOT" run_hook check-critical-write-allowlist.sh Edit "$PROOT/src/billing/Charge.cs")"; assert "out-of-scope edit" ask  "$out"

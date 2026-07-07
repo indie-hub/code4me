@@ -18,7 +18,11 @@
 # C4M_FORCE_WINDOWS=1 is set — the latter lets the test harness exercise the
 # case-insensitive path on a Linux CI runner.
 c4m_is_windows_bash() {
-    [ "${C4M_FORCE_WINDOWS:-0}" = "1" ] && return 0
+    case "${C4M_FORCE_WINDOWS:-}" in
+        1) return 0 ;;
+        0) return 1 ;;
+    esac
+
     case "$(uname -s 2>/dev/null)" in
         MINGW*|MSYS*|CYGWIN*) return 0 ;;
         *) return 1 ;;
