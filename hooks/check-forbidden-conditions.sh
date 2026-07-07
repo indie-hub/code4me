@@ -100,14 +100,6 @@ ABS_TARGET="$(c4m_resolve "$TARGET" "$PROJECT_DIR")"
 GLOBS_JSON="$(jq -r '.forbidden_globs[]?' "$FORBIDDEN_FILE" 2>/dev/null || true)"
 [ -n "$GLOBS_JSON" ] || emit_pass_through
 
-# macOS bash 3.2 lacks globstar, so we use a regex polyfill for ** support.
-if [ "${BASH_VERSINFO[0]:-0}" -ge 4 ]; then
-    shopt -s globstar nullglob extglob 2>/dev/null || true
-    USE_NATIVE_GLOB=1
-else
-    USE_NATIVE_GLOB=0
-fi
-
 glob_to_regex() {
     printf '%s' "$1" | sed \
         -e 's|\\|\\\\|g' \
@@ -124,14 +116,9 @@ glob_to_regex() {
 
 matches_glob() {
     local target="$1" pattern="$2"
-    if [ "$USE_NATIVE_GLOB" -eq 1 ]; then
-        # shellcheck disable=SC2053
-        [[ "$target" == $pattern ]]
-    else
-        local regex
-        regex="$(glob_to_regex "$pattern")"
-        [[ "$target" =~ ^${regex}$ ]]
-    fi
+    local regex
+    regex="$(glob_to_regex "$pattern")"
+    [[ "$target" =~ ^${regex}$ ]]
 }
 
 while IFS= read -r PATTERN; do
