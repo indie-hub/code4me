@@ -19,9 +19,10 @@ context_queries:
     filter: milestone={milestone_id}
     relevance: this-role
     limit: 3
-  - kind: openwolf
-    file: cerebrum
-    sections: [doc-style, audience-conventions, terminology]
+  - kind: basic-memory
+    query: "user preferences, project conventions, and do-not-repeat guidance: doc-style, audience-conventions, terminology"
+    purpose: user-preferences
+    limit: 5
   - kind: project-info
     type: claude-md
     relevance: project-root
@@ -56,7 +57,7 @@ If the audience or tone is not specified in the Context Pack and not derivable f
 
 ## Tooling preferences
 
-Follow the tooling hierarchy in `references/tooling.md`. First stop when OpenWolf is configured: `.wolf/cerebrum.md` for accumulated user preferences and Do-Not-Repeat patterns. Canonical sequence after that: LSP for code symbols, configured MCPs for project-shape queries, then `Read`/`Grep`/`Glob` as fallbacks.
+Follow the tooling hierarchy in `references/tooling.md`. First stop when Basic Memory is configured: search durable notes for user preferences, prior decisions, and Do-Not-Repeat patterns. For source code, use codegraph first for exact symbol graphs, CocoIndex second for semantic source discovery, optional legacy LSP only when configured, then `Read`/`Grep`/`Glob` as fallbacks.
 
 ## Division of responsibility
 

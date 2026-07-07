@@ -32,7 +32,7 @@ Write to `/tmp/codex-arch-{task_id}.txt`:
 ROLE: You are the Challenger Architect for a multi-agent SDLC workflow. Your job is to pressure-test an architecture proposal.
 
 INPUTS:
-{verbatim milestone_spec, AC, lead_proposal, architecture_discussion_record, amendment_if_any, relevant_buglog_entries_if_any}
+{verbatim milestone_spec, AC, lead_proposal, architecture_discussion_record, amendment_if_any, relevant_basic_memory_notes_if_any}
 
 MANDATORY CRITIQUE RULE:
 Produce a substantive critique. For each of these five areas, respond either "examined, found sound: <basis>" or "examined, found issue: <concern>":

@@ -30,10 +30,12 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y jq shellcheck
 
-      - name: Validate plugin.json
+      - name: Validate plugin manifests
         run: |
           jq empty .claude-plugin/plugin.json
+          jq empty .codex-plugin/plugin.json
           jq -r '.name + " " + .version' .claude-plugin/plugin.json
+          jq -r '.name + " " + .version' .codex-plugin/plugin.json
 
       - name: Validate hooks.json
         run: |
@@ -56,7 +58,7 @@ jobs:
 
       - name: Shellcheck bin scripts
         run: |
-          for f in bin/code4me-preflight bin/code4me-audit-dispatch-log bin/code4me-probe-run bin/code4me-lsp-check bin/code4me-install bin/audit4me-helpers.sh bin/audit4me-rebuild-coverage.sh; do
+          for f in bin/code4me-preflight bin/code4me-audit-dispatch-log bin/code4me-probe-run bin/code4me-lsp-check bin/code4me-install bin/code4me-install-deps bin/code4me-claude-wrapper-run bin/audit4me-helpers.sh bin/audit4me-rebuild-coverage.sh; do
             [ -x "$f" ] && shellcheck --severity=warning --shell=bash "$f" || true
           done
 
@@ -101,7 +103,7 @@ jobs:
 
       - name: Shellcheck test scripts
         run: |
-          shellcheck --severity=warning --shell=bash tests/hooks/*.sh tests/audit4me/*.sh tests/buglog/*.sh tests/install/*.sh
+          shellcheck --severity=warning --shell=bash tests/hooks/*.sh tests/audit4me/*.sh tests/install/*.sh
 
       - name: Validate audit4me JSON schemas
         run: |
@@ -119,8 +121,10 @@ jobs:
         run: |
           brew install jq shellcheck
 
-      - name: Validate plugin.json
-        run: jq empty .claude-plugin/plugin.json
+      - name: Validate plugin manifests
+        run: |
+          jq empty .claude-plugin/plugin.json
+          jq empty .codex-plugin/plugin.json
 
       - name: Hook syntax check
         run: |
@@ -135,11 +139,11 @@ jobs:
         run: |
           shellcheck --severity=warning --shell=bash \
             bin/audit4me-helpers.sh bin/audit4me-rebuild-coverage.sh \
-            tests/hooks/*.sh tests/audit4me/*.sh tests/buglog/*.sh tests/install/*.sh
+            tests/hooks/*.sh tests/audit4me/*.sh tests/install/*.sh
 
       - name: New-script syntax check (bash 3.2 path)
         run: |
-          for f in hooks/c4m-pathlib.sh bin/code4me-install bin/audit4me-helpers.sh bin/audit4me-rebuild-coverage.sh tests/hooks/*.sh tests/audit4me/*.sh tests/buglog/*.sh tests/install/*.sh; do
+          for f in hooks/c4m-pathlib.sh bin/code4me-install bin/code4me-install-deps bin/code4me-claude-wrapper-run bin/audit4me-helpers.sh bin/audit4me-rebuild-coverage.sh tests/hooks/*.sh tests/audit4me/*.sh tests/install/*.sh; do
             bash -n "$f" && echo "OK: $f"
           done
 
@@ -150,11 +154,40 @@ jobs:
           # Surface the version so any incompatibility is visible.
           bash --version | head -1
 
-  # NOTE: Windows CI is intentionally not added. Git Bash on GitHub Actions
-  # Windows runners is fragile for shellcheck and certain bash patterns. Run
-  # the static checks manually on Windows before submitting changes that touch
-  # hook regexes or path handling. See CONTRIBUTING.md "Running probes
-  # locally" for the manual procedure.
+  static-checks-windows:
+    name: Static checks (Windows Git Bash)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq
+        shell: pwsh
+        run: choco install jq -y --no-progress
+
+      - name: Validate JSON
+        run: |
+          jq empty .claude-plugin/plugin.json
+          jq empty .codex-plugin/plugin.json
+          jq empty hooks/hooks.json
+          for f in templates/project-starter/*.json templates/project-starter/*.json.example; do
+            [ -r "$f" ] && jq empty "$f" && echo "OK: $f"
+          done
+
+      - name: Syntax check
+        run: |
+          for f in hooks/*.sh tests/hooks/*.sh tests/install/*.sh; do
+            bash -n "$f" && echo "OK: $f"
+          done
+          bash -n bin/code4me-install
+          bash -n bin/code4me-install-deps
+          bash -n bin/code4me-claude-wrapper-run
+          bash -n bin/code4me-preflight
+
+      - name: Windows path-normalization regression test
+        run: bash tests/hooks/test-windows-paths.sh
 
   tests:
     name: Unit + regression tests (Linux)
@@ -171,16 +204,11 @@ jobs:
       - name: Hook path-normalization regression test
         run: bash tests/hooks/test-windows-paths.sh
 
+      - name: structural-first hook test
+        run: bash tests/hooks/test-structural-first.sh
+
       - name: audit4me helpers + rebuild-coverage test
         run: bash tests/audit4me/test-helpers.sh
-
-      - name: buglog tool test
-        run: |
-          python3 -m py_compile bin/code4me-buglog
-          bash tests/buglog/test-buglog.sh
-
-      - name: buglog-helper hook test
-        run: bash tests/buglog/test-buglog-hook.sh
 
       - name: installer + session-wiring tests
         run: |

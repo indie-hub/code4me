@@ -77,7 +77,7 @@ case "$(uname -s 2>/dev/null)" in
     MINGW*|MSYS*|CYGWIN*)
         PLATFORM_LABEL="Windows + Git Bash"
         PLATFORM_SUPPORT="warn"
-        PLATFORM_DETAIL="Git Bash (MINGW/MSYS) detected. Supported but untested in CI — verify manually after changes to hooks/ or bin/. Known quirks: CRLF line endings on clone (mitigated by .gitattributes), \$CLAUDE_PROJECT_DIR may arrive as a Windows path. See docs/howto-windows.md."
+        PLATFORM_DETAIL="Git Bash (MINGW/MSYS) detected. Supported; CI runs syntax and path-normalization coverage on windows-latest. Known quirks: CRLF line endings on clone (mitigated by .gitattributes), \$CLAUDE_PROJECT_DIR may arrive as a Windows path. See docs/howto-windows.md."
         ;;
     *)
         # Couldn't detect — might be native Windows running this somehow,
@@ -132,7 +132,7 @@ if [ -r "$SETTINGS" ] && command -v jq >/dev/null 2>&1; then
         esac
         [ -r "$cmdpath" ] || BAD_PATHS="${BAD_PATHS}[$cmdpath: missing] "
     done < <(jq -r '.hooks.PreToolUse[]?.hooks[]?.command // empty
-                    | select(test("/hooks/(check-test-protection|check-forbidden-conditions|check-critical-write-allowlist|check-buglog-helper|check-lsp-first-on-source)\\.sh"))
+                    | select(test("/hooks/(check-test-protection|check-forbidden-conditions|check-critical-write-allowlist|check-lsp-first-on-source|check-structural-first-on-source)\\.sh") or test("code4me[^[:space:]\"]*/hooks/check-[^[:space:]\"]+\\.sh"))
                     | sub("^bash +";"")' "$SETTINGS" 2>/dev/null)
     if [ -n "$BAD_PATHS" ]; then
         record "Hook command paths" fail "code4me hook command(s) don't resolve: ${BAD_PATHS% } — run: bash $PLUGIN_ROOT/bin/code4me-install"
@@ -141,13 +141,17 @@ if [ -r "$SETTINGS" ] && command -v jq >/dev/null 2>&1; then
     fi
 fi
 
-# ---- check 3: LSP enabled (env var) ----
-if [ -n "${ENABLE_LSP_TOOL:-}" ] && [ "$ENABLE_LSP_TOOL" = "1" ]; then
-    record "LSP enabled" ok "ENABLE_LSP_TOOL=1 in current environment"
-elif [ -r "$SETTINGS" ] && grep -q '"ENABLE_LSP_TOOL"' "$SETTINGS" 2>/dev/null; then
-    record "LSP enabled" ok "ENABLE_LSP_TOOL set in .claude/settings.json"
+# ---- check 3: LSP legacy optional state ----
+if [ -r "$PROJECT_DIR/.lsp.json" ]; then
+    if [ -n "${ENABLE_LSP_TOOL:-}" ] && [ "$ENABLE_LSP_TOOL" = "1" ]; then
+        record "LSP legacy optional" ok ".lsp.json present and ENABLE_LSP_TOOL=1 in current environment"
+    elif [ -r "$SETTINGS" ] && grep -q '"ENABLE_LSP_TOOL"' "$SETTINGS" 2>/dev/null; then
+        record "LSP legacy optional" ok ".lsp.json present and ENABLE_LSP_TOOL set in .claude/settings.json"
+    else
+        record "LSP legacy optional" warn ".lsp.json is present, but ENABLE_LSP_TOOL is not set. LSP is legacy optional; codegraph/CocoIndex remain the preferred source-code indexes." 0
+    fi
 else
-    record "LSP enabled" warn "ENABLE_LSP_TOOL=1 not in env or settings.json — LSP-backed tooling is off; subagents fall back to Read/Grep (more context-expensive)"
+    record "LSP legacy optional" ok "not configured; standard installs now prefer codegraph and CocoIndex over LSP" 0
 fi
 
 # ---- check 4: plugin-root .lsp.json (dev-checkout only; NOT shipped) ----
@@ -159,20 +163,20 @@ fi
 if [ -r "$PLUGIN_ROOT/.lsp.json" ]; then
     record "Plugin-root .lsp.json (dev only)" ok "found $PLUGIN_ROOT/.lsp.json (dev checkout)"
 else
-    record "Plugin-root .lsp.json (dev only)" warn "absent at plugin root — expected on a marketplace/cache install. The project .lsp.json (below) is authoritative; the shipped template is templates/project-starter/.lsp.json.example. Run bin/code4me-install to generate a project .lsp.json." 0
+    record "Plugin-root .lsp.json (dev only)" warn "absent at plugin root — expected on a marketplace/cache install. LSP is legacy optional; run bin/code4me-install --with-lsp only if this project still needs it." 0
 fi
 
 # ---- check 4-proj: project .lsp.json is valid + declared paths resolve (v0.13.1+) ----
 PROJ_LSP="$PROJECT_DIR/.lsp.json"
 if [ -r "$PROJ_LSP" ]; then
     if command -v jq >/dev/null 2>&1 && ! jq -e . "$PROJ_LSP" >/dev/null 2>&1; then
-        record "Project .lsp.json" fail "$PROJ_LSP is not valid JSON — regenerate with: bash $PLUGIN_ROOT/bin/code4me-install"
+        record "Project .lsp.json" fail "$PROJ_LSP is not valid JSON — regenerate with: bash $PLUGIN_ROOT/bin/code4me-install --with-lsp"
     elif grep -q "<PLUGIN_DIR>" "$PROJ_LSP" 2>/dev/null; then
-        record "Project .lsp.json" fail "$PROJ_LSP has an unsubstituted <PLUGIN_DIR> — run: bash $PLUGIN_ROOT/bin/code4me-install"
+        record "Project .lsp.json" fail "$PROJ_LSP has an unsubstituted <PLUGIN_DIR> — run: bash $PLUGIN_ROOT/bin/code4me-install --with-lsp"
     elif command -v jq >/dev/null 2>&1; then
         PROXY="$(jq -r '.cpp.args[]? | select(type=="string" and endswith("clangd-didopen-proxy.mjs"))' "$PROJ_LSP" 2>/dev/null | head -1)"
         if [ -n "$PROXY" ] && [ ! -r "$PROXY" ]; then
-            record "Project .lsp.json" fail "C++ proxy path doesn't exist: $PROXY — run: bash $PLUGIN_ROOT/bin/code4me-install"
+            record "Project .lsp.json" fail "C++ proxy path doesn't exist: $PROXY — run: bash $PLUGIN_ROOT/bin/code4me-install --with-lsp"
         else
             record "Project .lsp.json" ok "valid; declared LSP paths resolve"
         fi
@@ -224,6 +228,13 @@ else
     record "Codex CLI (optional)" warn "codex CLI not on PATH — codex-bridge skill invocations will BLOCK at pre-flight with codex_cli_not_installed. Install per https://github.com/openai/codex if you want cross-vendor pairing" 0
 fi
 
+# ---- check 5a: local Claude wrapper for Codex-orchestrated Claude consults ----
+if command -v claude-p >/dev/null 2>&1; then
+    record "Claude wrapper (optional)" ok "claude-p on PATH — Codex can use a local Claude Code subscription-session backend if a worker tool is configured"
+else
+    record "Claude wrapper (optional)" warn "claude-p not on PATH — optional. Install with 'npm install -g github:indie-hub/claude-wrapper' if you want Codex to consult local Claude Code without the Anthropic API path. See docs/howto-use-claude-wrapper.md" 0
+fi
+
 # ---- check 5b: DeepSeek bridging (optional, v0.11+) ----
 # Same "soft" treatment: we don't know if the user wants DeepSeek bridging.
 # The deepseek-bridge skill needs the `reasonix` CLI (DeepSeek-native agent;
@@ -246,18 +257,31 @@ fi
 
 # ---- check 5c: codegraph (optional, v0.13+) ----
 # Codegraph is a tree-sitter-based MCP server that pre-indexes the repo into
-# a local SQLite knowledge graph. The LSP-first hook detects it via the
-# presence of .codegraph/codegraph.db at the project root and lists
-# codegraph's MCP tools alongside LSP in its redirect message. Fully optional;
-# absence is a no-op.
+# a local SQLite knowledge graph. The structural-first hook detects it via the
+# presence of .codegraph/codegraph.db at the project root and prefers it over
+# context-mode/Grep for graph-shaped source-code lookup.
 if command -v codegraph >/dev/null 2>&1; then
     if [ -r "$PROJECT_DIR/.codegraph/codegraph.db" ]; then
-        record "codegraph (optional)" ok "codegraph CLI on PATH; .codegraph/codegraph.db indexed for this project — the LSP-first hook will list codegraph_* tools alongside LSP in its redirect message"
+        record "codegraph (optional)" ok "codegraph CLI on PATH; .codegraph/codegraph.db indexed for this project — structural-first redirects will list codegraph_* tools before context-mode"
     else
-        record "codegraph (optional)" warn "codegraph CLI on PATH but project not indexed yet — run 'codegraph init -i' at the project root to build .codegraph/codegraph.db, then the LSP-first hook will start surfacing codegraph in its redirect message" 0
+        record "codegraph (optional)" warn "codegraph CLI on PATH but project not indexed yet — run 'codegraph init -i' at the project root to build .codegraph/codegraph.db" 0
     fi
 else
-    record "codegraph (optional)" warn "codegraph CLI not on PATH — codegraph is an optional structural-first alternative to LSP; the LSP-first hook silently falls back to LSP-only. See docs/howto-use-codegraph.md if you want to install it (npm i -g @colbymchenry/codegraph)" 0
+    record "codegraph (optional)" warn "codegraph CLI not on PATH — graph-shaped source lookup will rely on CocoIndex if configured, then legacy LSP/fallbacks. See docs/howto-use-codegraph.md" 0
+fi
+
+# ---- check 5d: CocoIndex Code (optional) ----
+# CocoIndex Code exposes AST-aware semantic code search via `ccc search` and an
+# MCP `search` tool. It complements codegraph: codegraph for exact symbol graphs,
+# CocoIndex for natural-language and fuzzy source discovery.
+if command -v ccc >/dev/null 2>&1; then
+    if [ -d "$PROJECT_DIR/.cocoindex_code" ]; then
+        record "CocoIndex Code (optional)" ok "ccc on PATH; .cocoindex_code/ exists for this project — structural-first redirects will list CocoIndex before context-mode"
+    else
+        record "CocoIndex Code (optional)" warn "ccc on PATH but .cocoindex_code/ not found — run 'ccc index' at the project root before relying on CocoIndex search" 0
+    fi
+else
+    record "CocoIndex Code (optional)" warn "ccc not on PATH — install cocoindex-code and add its MCP server if you want AST-aware semantic code search. See docs/howto-use-cocoindex.md" 0
 fi
 
 # ---- check 6: jq for the audit + probe tools ----
@@ -267,25 +291,27 @@ else
     record "jq (audit and probe tools)" warn "jq not on PATH — bin/code4me-audit-dispatch-log and bin/code4me-probe-run will error out. Install via 'brew install jq', 'apt install jq', or 'choco install jq'" 0
 fi
 
-# ---- check 7: OpenWolf integration (v0.10.1+) ----
-# OpenWolf is optional. The plugin works fully without it; if present, the
-# orchestrator reads cerebrum.md / anatomy.md / buglog.json for accumulated
-# user preferences, project shape, and prior-bug context.
-WOLF_DIR="$PROJECT_DIR/.wolf"
-if [ -d "$WOLF_DIR" ]; then
-    WOLF_FILES=""
-    for f in cerebrum.md anatomy.md buglog.json; do
-        if [ -r "$WOLF_DIR/$f" ]; then
-            WOLF_FILES="$WOLF_FILES$f, "
-        fi
-    done
-    if [ -n "$WOLF_FILES" ]; then
-        record "OpenWolf (optional)" ok "$WOLF_DIR/ present with: ${WOLF_FILES%, }"
+# ---- check 7: Basic Memory integration ----
+# Basic Memory is optional persistent project memory via MCP. Shell preflight can
+# only detect local CLI/config hints; the actual MCP tools are visible inside the
+# agent session.
+BASIC_MEMORY_HINT=""
+if command -v basic-memory >/dev/null 2>&1; then
+    BASIC_MEMORY_HINT="basic-memory CLI on PATH"
+elif command -v uvx >/dev/null 2>&1; then
+    BASIC_MEMORY_HINT="uvx on PATH; local MCP can run with 'uvx basic-memory mcp'"
+fi
+
+if [ -r "$HOME/.codex/config.toml" ] && grep -q 'basic-memory' "$HOME/.codex/config.toml" 2>/dev/null; then
+    if [ -n "$BASIC_MEMORY_HINT" ]; then
+        record "Basic Memory (optional)" ok "$BASIC_MEMORY_HINT; ~/.codex/config.toml references basic-memory"
     else
-        record "OpenWolf (optional)" warn "$WOLF_DIR/ exists but no cerebrum.md / anatomy.md / buglog.json yet — orchestrator will silently skip OpenWolf reads until those files exist" 0
+        record "Basic Memory (optional)" ok "~/.codex/config.toml references basic-memory"
     fi
+elif [ -n "$BASIC_MEMORY_HINT" ]; then
+    record "Basic Memory (optional)" warn "$BASIC_MEMORY_HINT, but no basic-memory entry found in ~/.codex/config.toml. Configure the MCP server if you want persistent project memory in Codex." 0
 else
-    record "OpenWolf (optional)" warn "$WOLF_DIR/ not found — OpenWolf integration is off; the plugin works fully without it. If you want cerebrum-driven decision pre-deciding, install OpenWolf at the project root" 0
+    record "Basic Memory (optional)" warn "not detected. The plugin works without persistent memory. See docs/howto-use-basic-memory.md if you want durable project memory." 0
 fi
 
 # ---- check 7b: Trello sync (v0.10.3+) ----
@@ -318,19 +344,20 @@ else
     record "Trello sync (optional)" warn "$TRELLO_CONFIG not found — Trello sync is off; trello-sync skill no-ops. Run /code4me-trello-init to enable" 0
 fi
 
-# ---- check 8: context-mode plugin (v0.10.1+) ----
-# Look for the context-mode plugin in the user's Claude Code plugin directory.
-# Optional — flagged as warn if absent.
+# ---- check 8: context-mode plugin (optional) ----
+# context-mode is useful for derived analysis and large non-source outputs, but
+# it should not be the first stop for source-code lookup when codegraph or
+# CocoIndex can answer.
 CONTEXT_MODE_DIR="$HOME/.claude/plugins/context-mode"
 if [ -d "$CONTEXT_MODE_DIR" ]; then
     if [ -r "$CONTEXT_MODE_DIR/.claude-plugin/plugin.json" ]; then
         CM_VERSION=$(jq -r '.version // "unknown"' "$CONTEXT_MODE_DIR/.claude-plugin/plugin.json" 2>/dev/null || echo "unparseable")
-        record "context-mode plugin (optional)" ok "installed at $CONTEXT_MODE_DIR (version $CM_VERSION)"
+        record "context-mode plugin (optional)" ok "installed at $CONTEXT_MODE_DIR (version $CM_VERSION); keep it behind codegraph/CocoIndex for source-code lookup"
     else
         record "context-mode plugin (optional)" warn "$CONTEXT_MODE_DIR/ exists but no .claude-plugin/plugin.json — plugin may be partially installed or corrupted" 0
     fi
 else
-    record "context-mode plugin (optional)" warn "not installed at $CONTEXT_MODE_DIR — flagged because you've asked preflight to check for it; install at that path if you want code4me to integrate" 0
+    record "context-mode plugin (optional)" warn "not installed at $CONTEXT_MODE_DIR — optional. Use it for derived analysis/logs/docs; codegraph/CocoIndex are preferred for source-code lookup" 0
 fi
 
 # ---- Critical-mode extra checks ----
@@ -387,7 +414,7 @@ if [ "$QUIET" -eq 0 ]; then
     printf '**Summary:** %d ok, %d warning, %d failed\n' "$OK_COUNT" "$WARN_COUNT" "$FAIL_COUNT"
 
     if [ "$FAIL_COUNT" -gt 0 ]; then
-        printf '\n_Resolve the FAILed checks before dispatching. Warnings are advisory — they identify degraded capabilities (e.g., LSP off → subagents fall back to Read/Grep) rather than broken state._\n'
+        printf '\n_Resolve the FAILed checks before dispatching. Warnings are advisory — they identify optional capabilities that are missing or not configured._\n'
     elif [ "$WARN_COUNT" -gt 0 ]; then
         printf '\n_All required checks passed. Warnings are advisory — review each to decide whether to address before dispatching._\n'
     else

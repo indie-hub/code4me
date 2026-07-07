@@ -134,7 +134,7 @@ This is a recommendation, not a hard requirement — the user picks their sessio
 
 ## What changes if you remove `ETHOS.md`?
 
-The ETHOS file documents the shared operating principles every subagent inherits: pacing (wrong work is more expensive than paused work), simplicity (prefer simple designs, verifiable work), role boundaries (orchestrator dispatches; subagents execute; PO decides), context (OpenWolf first, then LSP, then MCPs, then fallbacks), fidelity (surface BLOCKED with typed reasons rather than reformatting), project guidance (project CLAUDE.md authoritatively overrides), user authority (PO is final on product behaviour), INSIGHT emission (route learnings upstream).
+The ETHOS file documents the shared operating principles every subagent inherits: pacing (wrong work is more expensive than paused work), simplicity (prefer simple designs, verifiable work), role boundaries (orchestrator dispatches; subagents execute; PO decides), context (Basic Memory for durable prior knowledge; codegraph/CocoIndex for source lookup; MCPs/context-mode/fallbacks after that), fidelity (surface BLOCKED with typed reasons rather than reformatting), project guidance (project CLAUDE.md authoritatively overrides), user authority (PO is final on product behaviour), INSIGHT emission (route learnings upstream).
 
 Each individual subagent's role-specific directive sits on top of the ETHOS. If you remove ETHOS, every subagent file would need to re-encode those principles independently, and they'd drift. The shared file is the load-bearing consistency mechanism.
 

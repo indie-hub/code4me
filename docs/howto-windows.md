@@ -50,10 +50,18 @@ Run Claude Code from Git Bash so it inherits the bash environment.
 **Git Bash quirks to know:**
 
 - **Path translation.** Git Bash auto-translates `C:\path` to `/c/path` in many contexts but not all. The hooks expect `$CLAUDE_PROJECT_DIR` to be a path bash can read; if Claude Code passes a Windows-style path, you may need to set `MSYS_NO_PATHCONV=1` to disable translation for specific commands, or `MSYS_ARG_CONV_EXCL="*"` to preserve arguments. The path-matching hooks now normalize Windows paths internally (see `hooks/c4m-pathlib.sh`): backslashes are converted to `/`, drive-letter paths (`C:\...` / `C:/...`) are recognized as absolute, and matching is case-insensitive on Windows. This is covered by `tests/hooks/test-windows-paths.sh`.
-- **Symlinks.** Git Bash on Windows doesn't always handle symlinks the way Linux does. None of the plugin's hooks or bin scripts create symlinks, but if you set up an OpenWolf integration that uses them, expect rough edges.
+- **Symlinks.** Git Bash on Windows doesn't always handle symlinks the way Linux does. None of the plugin's hooks or bin scripts create symlinks; keep Basic Memory and CocoIndex paths normal rather than symlinked when possible.
 - **CRLF line endings.** Mitigated as of v0.13.0-dev via `.gitattributes` — `*.sh` and other text files are forced to LF on checkout regardless of `core.autocrlf` setting. If you cloned before v0.13.0-dev and your hooks have `\r` characters, re-clone or run `git add --renormalize .`.
 
 ## Install dependencies
+
+From Git Bash or WSL, start with:
+
+```bash
+bash bin/code4me-install-deps --check
+```
+
+Use `--install <group>` only when you want the script to run package-manager commands for a group.
 
 The hooks need `jq`. The optional integrations may need additional CLIs.
 
@@ -160,10 +168,10 @@ Use [GitHub Issues](../../issues) with the `bug_report` template. Please include
 - Your Windows environment (WSL distro name + version, or Git Bash version from `bash --version`)
 - The exact failure: hook didn't fire, script errored on shebang, path lookup failed, etc.
 
-We don't have Windows CI; user reports are the primary signal for what's broken. Concrete repros are gold.
+The CI workflow includes a Windows Git Bash job for syntax and path-normalization coverage. User reports are still important for client-specific launch and PATH issues. Concrete repros are gold.
 
 ## When native Windows support might happen
 
-Native Windows (cmd.exe / PowerShell, no bash) would require rewriting the hooks and bin scripts in Node or Python — substantial work. It's not on the roadmap as of v0.13.0-dev. The reasoning: most Windows developers who use Claude Code also have WSL or Git Bash, and the cost of dropping bash everywhere is high (we'd lose the shellcheck CI gate, the per-hook simplicity, the well-trodden bash idioms).
+Native Windows (cmd.exe / PowerShell, no bash) would require rewriting the hooks and bin scripts in Node or Python — substantial work. It's not on the roadmap as of v0.13.2-dev. The reasoning: most Windows developers who use Claude Code also have WSL or Git Bash, and the cost of dropping bash everywhere is high (we'd lose the shellcheck CI gate, the per-hook simplicity, the well-trodden bash idioms).
 
 If WSL or Git Bash is genuinely unworkable for you, [open a discussion](../../discussions) explaining your constraint. Empirical demand drives the priority.

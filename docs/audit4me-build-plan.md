@@ -11,7 +11,7 @@
 
 Phase 0 landed in v0.13.0-dev. It shipped the data-model commitment (four JSON schemas) and the read-only surface (`/audit4me-config`, `/audit4me-status`) — deliberately no orchestrator, no actual auditing yet. The whole point of Phase 0 was to validate the file shapes and slash-command UX *before* committing the per-file orchestrator pattern, while code4me v0.12 continues soaking against real milestones.
 
-Phase 1 shipped in v0.13.1-dev once the v0.12 soak bar was judged met. Note: during that soak, two real bugs were found and fixed in the Critical-mode hooks — Windows path normalisation, and the critical-write allowlist gating the orchestrator's own `.code4me/` and `.wolf/` state dirs (`hooks/c4m-pathlib.sh` + carve-out; covered by `tests/hooks/test-windows-paths.sh`). They were annoyances rather than correctness failures, and the soak signal held.
+Phase 1 shipped in v0.13.1-dev once the v0.12 soak bar was judged met. Note: during that soak, two real bugs were found and fixed in the Critical-mode hooks — Windows path normalisation, and the critical-write allowlist gating the orchestrator's own `.code4me/` and `.code4me/basic-memory/` state dirs (`hooks/c4m-pathlib.sh` + carve-out; covered by `tests/hooks/test-windows-paths.sh`). They were annoyances rather than correctness failures, and the soak signal held.
 
 **Deviations from the plan, as built:**
 

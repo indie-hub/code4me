@@ -35,7 +35,7 @@
 `.code4me/` contains:
 - One active milestone with all dispatches returned
 - One Conversation Mode task in `state: PROVISIONAL` with promote-or-revert deadline 3 days from now
-- One INSIGHT with `impact: required change before next similar task` flushed to `.wolf/cerebrum.md`
+- One INSIGHT with `impact: required change before next similar task` flushed to Basic Memory or queued for durable memory write
 
 #### Expected
 

@@ -15,7 +15,7 @@ Common: task ID, parent milestone, Milestone Spec, acceptance criteria (numbered
 
 Mode-specific:
 
-**propose:** Prior architecture decisions (ADRs, prior Tech Specs in adjacent areas); architecture-conventions from cerebrum if available; prior failure modes from buglog if available.
+**propose:** Prior architecture decisions (ADRs, prior Tech Specs in adjacent areas); architecture conventions and prior failure modes from Basic Memory if available.
 
 **amend:** Current Tech Spec draft; Challenger's findings (`amendments_required`, `named_alternatives`, `five_area_examination`); Architecture Discussion Record so far.
 
@@ -31,10 +31,10 @@ INPUTS:
 - Acceptance Criteria (numbered list): {verbatim}
 - Workflow weight: {Standard | Critical}
 - Prior architecture decisions: {verbatim}
-- Architecture conventions (from cerebrum.md if available): {verbatim}
+- Architecture conventions (from Basic Memory if available): {verbatim}
 - Coding standards (project CLAUDE.md): {verbatim}
 - Plugin language guidance: {verbatim}
-- Prior failure modes worth considering (from buglog.json if available): {verbatim}
+- Prior failure modes worth considering (from Basic Memory if available): {verbatim}
 
 PROCEDURE:
 1. Read the Milestone Spec and AC list. If product questions are MATERIAL to the design, return outcome=NEEDS_PRODUCT_CLARIFICATION with the specific questions.

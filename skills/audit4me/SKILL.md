@@ -1,6 +1,6 @@
 ---
 name: audit4me
-description: Batch, cross-vendor codebase auditor. Sibling product to code4me. audit4me proposes findings (bugs, security, performance, maintainability, test-gaps) with confidence scoring from multi-vendor agreement; code4me applies them via Conversation Mode when the user invokes `/audit4me-apply`. Phase 1 scope (current): single-vendor (anthropic), single-category (bugs) auditing via `/audit4me-run`, on top of the Phase 0 config + status surface and committed data model. No proposed fixes yet (multi-vendor agreement, failing tests, and `/audit4me-apply` land in Phases 2-4). Invoke this skill via `/audit4me-config` (one-time setup) or `/audit4me-status` (read-only coverage report).
+description: "Batch, cross-vendor codebase auditor. Sibling product to code4me. audit4me proposes findings (bugs, security, performance, maintainability, test-gaps) with confidence scoring from multi-vendor agreement; code4me applies them via Conversation Mode when the user invokes `/audit4me-apply`. Phase 1 scope (current): single-vendor (anthropic), single-category (bugs) auditing via `/audit4me-run`, on top of the Phase 0 config + status surface and committed data model. No proposed fixes yet (multi-vendor agreement, failing tests, and `/audit4me-apply` land in Phases 2-4). Invoke this skill via `/audit4me-config` (one-time setup) or `/audit4me-status` (read-only coverage report)."
 ---
 
 # audit4me

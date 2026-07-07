@@ -157,4 +157,4 @@ The `src/` layout (over a flat `my_package/` at the repository root) prevents ac
 
 ## When in doubt
 
-The project's `CLAUDE.md` (root or hierarchical) authoritatively overrides this baseline. Plugin-shipped guidance is generic — your project's voice wins. If you observe a conflict between this file and the project's conventions, surface it as an INSIGHT to the orchestrator (per `references/insight.md`) so the conflict can be resolved at the cerebrum, project-CLAUDE.md, or guidance-amendment layer rather than silently following either side.
+The project's `CLAUDE.md` (root or hierarchical) authoritatively overrides this baseline. Plugin-shipped guidance is generic — your project's voice wins. If you observe a conflict between this file and the project's conventions, surface it as an INSIGHT to the orchestrator (per `references/insight.md`) so the conflict can be resolved in Basic Memory, project-CLAUDE.md, or the guidance-amendment layer rather than silently following either side.

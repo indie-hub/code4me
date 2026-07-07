@@ -27,13 +27,14 @@ context_queries:
     filter: milestone={milestone_id}
     relevance: this-role
     limit: 5
-  - kind: openwolf
-    file: buglog
-    relevance: surface
+  - kind: basic-memory
+    query: "prior failure modes, incidents, and recurring fixes for surface"
+    purpose: prior-fixes
     limit: 5
-  - kind: openwolf
-    file: cerebrum
-    sections: [testing-conventions, exploratory-testing]
+  - kind: basic-memory
+    query: "user preferences, project conventions, and do-not-repeat guidance: testing-conventions, exploratory-testing"
+    purpose: user-preferences
+    limit: 5
   - kind: project-info
     type: claude-md
     relevance: project-root
@@ -71,9 +72,9 @@ For Bug Fix workflow specifically, replace the above with: bug report (symptoms,
 
 ## Tooling preferences
 
-Follow the tooling hierarchy in `references/tooling.md`. First stop when OpenWolf is configured: `.wolf/cerebrum.md` for accumulated user preferences and Do-Not-Repeat patterns. Canonical sequence after that: LSP for code symbols, configured MCPs for project-shape queries, then `Read`/`Grep`/`Glob` as fallbacks.
+Follow the tooling hierarchy in `references/tooling.md`. First stop when Basic Memory is configured: search durable notes for user preferences, prior decisions, and Do-Not-Repeat patterns. For source code, use codegraph first for exact symbol graphs, CocoIndex second for semantic source discovery, optional legacy LSP only when configured, then `Read`/`Grep`/`Glob` as fallbacks.
 
-QA is runtime-side, so prioritise `.wolf/buglog.json` for prior failure modes and runtime-oriented MCPs (monitoring, log query, error tracker, test runner, scene/prefab/asset for game engines); LSP is secondary, used only to understand a function before crafting an edge-case input.
+QA is runtime-side, so prioritise Basic Memory prior-fixes notes for prior failure modes and runtime-oriented MCPs (monitoring, log query, error tracker, test runner, scene/prefab/asset for game engines); LSP is secondary, used only to understand a function before crafting an edge-case input.
 
 ## Workflow Anomaly Rule
 

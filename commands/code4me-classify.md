@@ -6,7 +6,7 @@ argument-hint: <task description>
 Run the code4me orchestrator's intake and classification flow on the following request, but **stop before any Task-tool dispatch**. Specifically:
 
 1. Load the `code4me` skill (`skills/code4me/SKILL.md` and `ETHOS.md`).
-2. Consult cerebrum if OpenWolf is configured (`.wolf/cerebrum.md`).
+2. Consult Basic Memory if its MCP tools are configured.
 3. Run the **intake** step: understand intent and stakes; ask clarifying questions only if necessary to classify.
 4. Run **classification**: kind (Bug Fix / Tech Debt / Spike / Incident / Scope Change / product), weight (Conversation / Light / Standard / Critical).
 5. Apply **auto-escalation override**: check the symptom-class list in `references/auto-escalation.md`. If any apply, raise the weight to at least Standard and record the trigger.

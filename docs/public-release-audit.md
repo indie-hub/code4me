@@ -50,7 +50,7 @@ Probe / doc examples that lean specifically on C#/Swift/C++ (the three languages
 - `.cpp` / `cpp` mentions: 10
 - `.csharp` / `csharp` mentions: 3
 
-_Many of these are legitimate (the LSP-first hook tests use .cs/.swift/.cpp because those are the languages declared in the test .lsp.json). Worth reviewing the docs/howto-configure-lsp.md to confirm it presents the four shipped LSP configs (C#, Swift, C++, Python) as examples rather than the canonical set._
+_Many of these are legitimate (the structural-first hook tests use .cs/.swift/.cpp because those are the languages declared in the test .lsp.json). Worth reviewing the docs/howto-configure-lsp.md to confirm it presents the four shipped LSP configs (C#, Swift, C++, Python) as examples rather than the canonical set._
 
 ## 9. First-person voice in documentation
 
@@ -75,9 +75,8 @@ _CHANGELOG is append-only by convention; these don't strictly need cleanup but y
 
 These tools / plugins are mentioned in the plugin's docs and skills; verify each is presented as an example or optional integration, not a hard requirement:
 
-- `OpenWolf`: 33 mentions
+- `Basic Memory`: 33 mentions
 - `context-mode`: 4 mentions
-- `openwolf`: 7 mentions
 - `context-mode`: 4 mentions
 - `trello-config`: 10 mentions
 - `Reasonix`: 46 mentions
@@ -95,4 +94,3 @@ These tools / plugins are mentioned in the plugin's docs and skills; verify each
 8. **Review docs first-person voice** — neutralize 'my', 'I', etc., to plugin-author-neutral framing.
 9. **Write a fixture project** — a working example users can clone and run a milestone against.
 10. **Rewrite README for newcomers** — currently structured for users who already understand code4me.
-

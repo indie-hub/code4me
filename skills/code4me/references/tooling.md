@@ -1,100 +1,137 @@
 # Tooling Preferences
 
-Canonical statement of the tooling preferences code4me subagents follow. The actual directives live in each subagent's system prompt — this file is the single source so changes propagate from one place.
+Canonical tooling preferences for code4me subagents. Subagent prompts point here
+so the order stays consistent across roles.
 
-## LSP first
+## Persistent Memory
 
-Before reading a whole file, prefer LSP-style queries when available:
+Use **Basic Memory** when it is available through MCP. It replaces the old
+project-local memory path for cross-session project knowledge.
 
-- **go-to-definition** for a symbol
-- **find-references** for who uses what
-- **hover / type info** for signatures and shapes
-- **document-symbols** to enumerate what's in a file without reading it
-- **workspace-symbols** for navigation
-- **go-to-implementation** for interfaces and abstract methods
-- **call-hierarchy** (`prepareCallHierarchy`, `incomingCalls`, `outgoingCalls`) for who-calls-whom
+Consult Basic Memory before decisions that benefit from prior context:
 
-LSP queries are token-efficient and surface only what you need. Whole-file reads should be a fallback, not a default. When you do need a whole file, briefly justify it to yourself — that hygiene check keeps your context tight over the run of a task.
+- architecture decisions and "do not repeat" preferences
+- prior fixes and recurring failure modes
+- project conventions that are not obvious from the current diff
+- notes that the user or prior agents explicitly saved for future sessions
 
-This applies to: navigating the codebase to understand a change site, confirming an interface exists as specified, finding callers of a function you're modifying, checking type shapes, locating tests for a module.
+Preferred Basic Memory tools:
 
-## Configured LSP servers
+- `search_notes` or `search` to find prior decisions and fixes
+- `read_note`, `read_content`, or `build_context` for a specific memory URL
+- `write_note` or `edit_note` to persist durable decisions, postmortems, and
+  reusable project guidance
 
-The plugin ships a `.lsp.json` at the root that wires language servers for specific languages. Subagents using LSP-aware tooling will pick these up automatically when `ENABLE_LSP_TOOL=1` is set in `~/.claude/settings.json`.
+Do not use memory as a substitute for source inspection. Memory answers "what
+have we learned before?" Code indexes answer "what does the repo do now?"
 
-| Language | Server | Extensions | Status |
-|----------|--------|------------|--------|
-| C# | `roslyn-language-server` (Microsoft, via `dotnet tool install --global roslyn-language-server --prerelease`) | `.cs`, `.csx`, `.cshtml` | configured |
-| Swift | `xcrun sourcekit-lsp` (bundled with Xcode 11.4+ / Command Line Tools) | `.swift` | configured |
-| C / C++ | `clangd` (LLVM project; install via `brew install llvm`, `apt install clangd`, etc.) | `.cpp`, `.cxx`, `.cc`, `.c++`, `.hpp`, `.hxx`, `.hh`, `.h++`, `.h`, `.c` | configured |
+## Source-Code Lookup
 
-Setup steps and troubleshooting live in the project README's "LSP support" section. To add another language, add a sibling key to `.lsp.json` and document it in this table.
+Use source-code indexes before `Read`, `Grep`, or context-mode for source-code
+consultation.
 
-## MCPs (project-level)
+### 1. codegraph
 
-Unlike LSPs (language-shape, plugin-shipped), MCPs are project-shape — a database MCP needs a specific connection string, a Unity MCP needs a specific project path. They live in the project's `.mcp.json`, not the plugin's.
+Use codegraph first for exact structural questions when the repo has
+`.codegraph/codegraph.db`:
 
-The plugin states the **principle**: prefer MCPs over fallback tools when an MCP serves the task. The project states the **inventory**: which MCPs are available and when to use each (typically in the project's `CLAUDE.md`).
+- "tell me about this symbol"
+- "who calls this"
+- "what does this call"
+- "what is the downstream impact"
+- "show neighboring definitions and call paths"
 
-### When to use an MCP
+### 2. CocoIndex Code
 
-When you (the subagent) start a task, scan the available tools in your context for `mcp__*` entries. If any of them serve the question you need to answer, prefer them over `Read`, `Grep`, or `Glob`. MCPs are structured queries — token-efficient, surfacing only what you need — for the same reason LSP-first applies.
+Use CocoIndex Code for semantic or fuzzy source discovery when `ccc` or the
+`cocoindex-code` MCP server is available:
 
-### Examples by domain
+- "where do we embed documents"
+- "find the auth flow"
+- "find code related to CSV export"
+- "search implementations without knowing the exact symbol name"
 
-- Project files in a Unity codebase → `mcp__unity__*` (scene structure, prefab queries, component lookups, asset references) before reading `.unity`, `.prefab`, or `.meta` files
-- Database shape questions → `mcp__db__*` (query, schema, indexes) before searching migrations
-- Ticket / issue context → `mcp__jira__*` or `mcp__github__*` before reading whole issue threads
-- CI / deployment status → `mcp__ci__*` before reading log files
-- Internal documentation → `mcp__notion__*` or `mcp__confluence__*` before crawling URLs
+Run `ccc index` once at the project root when the repo has not been indexed.
+Via MCP, prefer the `search(query, limit, paths, languages)` tool.
 
-### What if no MCP is available
+### 3. LSP
 
-Fall back to `Read`, `Grep`, `Glob`, or LSP queries (per the LSP-first rule above). The principle doesn't penalise the absence of MCPs — it penalises *ignoring* configured MCPs in favour of more expensive fallback tools.
+LSP is legacy optional. Use it when a project still has `.lsp.json` and the
+question needs language-server precision:
 
-### Why this matters
+- exact type/signature hover
+- diagnostics
+- refactoring-grade single-language references
+- implementation/definition in a language where LSP is known to be more precise
 
-A subagent that uses `Read`+`Grep` when a configured MCP could have answered the question in one structured call has not failed any rule, but has spent context wastefully. Same hygiene argument as LSP-first.
+Standard installs do not generate `.lsp.json` by default. Use
+`bin/code4me-install --with-lsp` only for projects that still want this path.
 
----
+## MCPs
 
-## OpenWolf — first stop when available
+Prefer project-specific MCPs over fallback file reads when an MCP directly
+serves the question:
 
-OpenWolf is invisible middleware for Claude Code — six hook scripts that fire on tool calls plus a `.wolf/` directory in the project root. You don't invoke OpenWolf directly; you consult its `.wolf/` files before doing things, and the hooks intercept your reads/writes to enforce learning and prevent repeated work.
+- database shape questions -> database MCP
+- PR or issue context -> GitHub/Jira MCP
+- UI verification -> Playwright/browser MCP
+- Trello status projection -> Trello MCP
 
-When OpenWolf is configured, the `.wolf/` files are your **first stops**, in this order of usefulness:
+MCPs are project-specific. The orchestrator should include the available MCP
+inventory in each dispatch context pack with one-line preference notes.
 
-1. **`.wolf/cerebrum.md`** — accumulated user preferences, past corrections, and "Do-Not-Repeat" patterns. **Read this before every meaningful decision** — before classifying weight, before writing code, before choosing a design, before producing tests. The cerebrum often pre-decides routing; ignoring an entry is a known failure mode the hooks try to catch. This is the single most valuable file in `.wolf/` because it carries cross-session, cross-milestone learning the user has already paid for once.
-2. **`.wolf/anatomy.md`** — project file map. Every file has a one-line description and a token estimate. Read *before* opening any file; often the description is enough and you don't need to read the file at all. Whole-file reads should be a fallback, not a default.
-3. **`.wolf/buglog.json`** — bug-fix memory keyed by error message. Before diagnosing an error, search this file. The same error has often been fixed before; the fix is recorded. **Do not read the whole file** — it grows to hundreds of entries (~90k+ tokens). Query it with the `bin/code4me-buglog` helper, which returns only the matching entries: `code4me-buglog search --error "<substring>"` (or `--tag`, `--file`, `--since`), `code4me-buglog get <bug-id>`, `code4me-buglog stats`. To record a fix, `code4me-buglog add --error … --file … --fix …` (dedup-aware: bumps `occurrences` on a recurrence) or `code4me-buglog update <bug-id> …`. The helper writes in OpenWolf's exact format, so it coexists with OpenWolf's own auto-logger. (`code4me-buglog doctor [--fix-ids]` reports/repairs integrity issues such as duplicate ids.) A PreToolUse hook (`check-buglog-helper.sh`, auto-wired) enforces this: a whole-file Read/Grep or a hand-edit of `.wolf/buglog.json` is ask-gated and redirected here, so the guidance holds even under drift. (It self-disables when the project has no `.wolf/buglog.json`.)
-4. **`.wolf/memory.md`** — chronological action log of what's been done in recent sessions. Useful for understanding context if you need to know what changed earlier.
+## Local Agent Backends
 
-The hooks themselves are invisible — they fire automatically on your tool calls. Repeated reads of the same file in one session will be warned or blocked. After writes, `anatomy.md` auto-updates. You don't manage any of that.
+`claude-p` from [indie-hub/claude-wrapper](https://github.com/indie-hub/claude-wrapper)
+is an optional agent backend, not a memory or source-lookup tool. Use it only
+when Codex is the orchestrator and a Claude/local-Claude consult was explicitly
+requested or selected by cross-vendor policy.
 
-`.wolf/OPENWOLF.md` carries auto-loaded session instructions; if you're a subagent, your context already has them — don't re-read.
+Prefer a configured MCP worker/tool that wraps `claude-p`. If you must call it
+from Codex directly, use the code4me helper so cwd, timeout, and JSON output are
+explicit:
 
-### Why cerebrum specifically
+```bash
+bin/code4me-claude-wrapper-run --prompt-file prompt.md --cwd "$PWD" --timeout-sec 300
+```
 
-The Insight Register (`.code4me/insight-register-{milestone_id}.md`) is per-milestone audit. Cerebrum is cross-project memory. They're related — `required` impact-tier INSIGHTs propagate from the register into cerebrum (see `references/insight.md`) — but cerebrum is what survives across sessions. Reading it first gives you everything the user has effectively pre-authorised about how this codebase should be handled.
+Do not pass provider API environment variables to this path. The point is to use
+the local Claude Code login state, with normal account and rate limits intact.
 
-A subagent that writes code without consulting cerebrum.md and ends up violating a Do-Not-Repeat entry has not failed a rule, but has wasted everyone's effort on something the user already corrected. Same hygiene argument as LSP-first, but with a stronger case: cerebrum is uniquely the user's voice from prior work.
+## context-mode
 
-## When neither applies
+Use context-mode after the source-code indexes for:
 
-Fall back to standard file reads (`Read`, `Grep`, `Glob`), but stay narrow:
+- derived analysis over a known file or narrowed region
+- logs, build output, generated reports, and large non-source text
+- counting, filtering, aggregation, and transformation where raw bytes should
+  stay out of the conversation
 
-- read only the regions you need (use line offsets and limits when a file is large)
-- prefer `Grep` for "where is this referenced" questions when LSP is unavailable
-- prefer `Glob` for structural questions over reading every file
+Do not use context-mode as the first step for "where is symbol X?", "who calls
+Y?", or "what does this module do?" when codegraph or CocoIndex can answer.
+The structural-first hook ask-gates common context-mode source-search shapes.
 
-## Subagent-specific notes
+## Fallback Tools
+
+Use `Read`, `Grep`, and `Glob` when no structured surface applies, or when the
+query is genuinely text-shaped:
+
+- regex inside comments or string literals
+- generated/build artifacts not indexed by code tools
+- short direct reads after a code index already returned a file and line range
+- non-source config or markdown searches
+
+Keep fallback reads narrow. Prefer line ranges over whole-file reads once the
+target area is known.
+
+## Role Notes
 
 | Role | Most-relevant tooling |
-|------|------------------------|
-| Developer | LSP (definitions, references, types); OpenWolf for module-level inspection |
-| Combined Reviewer | LSP for change-site context (callers, callees); OpenWolf for spot-checking adjacent files |
-| Spec-to-Test | LSP to confirm interfaces exist; Grep + OpenWolf to find existing test conventions |
-| Verification | LSP for AC-to-implementation tracing; Grep for evidence; whole-file reads only when necessary |
-| Code Reviewer | LSP for structural analysis; OpenWolf for fast cross-reference of the change |
-| QA | OpenWolf for inspecting boundaries around the change; runtime tools as appropriate |
-| Researcher | OpenW
+|---|---|
+| Developer | Basic Memory for prior decisions; codegraph/CocoIndex for source navigation; context-mode for derived analysis |
+| Combined Reviewer | codegraph/CocoIndex for change-site context; Basic Memory for prior bug patterns |
+| Spec-to-Test | Basic Memory for test conventions; codegraph/CocoIndex to confirm interfaces |
+| Verification | codegraph/CocoIndex for AC-to-implementation tracing; context-mode for evidence aggregation |
+| Code Reviewer | codegraph for blast radius; CocoIndex for semantic adjacent-code discovery |
+| QA | Basic Memory for prior incidents; project MCPs and browser tools as appropriate |
+| Researcher | Basic Memory for saved project knowledge; external sources only when current facts are required |

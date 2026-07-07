@@ -28,9 +28,10 @@ context_queries:
     type: execution-dependency-plan
     filter: milestone={milestone_id}
     relevance: this-milestone
-  - kind: openwolf
-    file: cerebrum
-    sections: [verification-conventions, ac-traceability]
+  - kind: basic-memory
+    query: "user preferences, project conventions, and do-not-repeat guidance: verification-conventions, ac-traceability"
+    purpose: user-preferences
+    limit: 5
   - kind: project-info
     type: claude-md
     relevance: project-root
@@ -90,7 +91,7 @@ If any are missing, return `outcome: BLOCKED` with `blocker: <missing field>`.
 
 ## Tooling preferences
 
-Follow the tooling hierarchy in `references/tooling.md`. First stop when OpenWolf is configured: `.wolf/cerebrum.md` for accumulated user preferences and Do-Not-Repeat patterns. Canonical sequence after that: LSP for code symbols, configured MCPs for project-shape queries, then `Read`/`Grep`/`Glob` as fallbacks.
+Follow the tooling hierarchy in `references/tooling.md`. First stop when Basic Memory is configured: search durable notes for user preferences, prior decisions, and Do-Not-Repeat patterns. For source code, use codegraph first for exact symbol graphs, CocoIndex second for semantic source discovery, optional legacy LSP only when configured, then `Read`/`Grep`/`Glob` as fallbacks.
 
 You do not run the test suite from scratch — that's the project's CI's job; you confirm its status, preferably via configured CI/coverage MCPs when available.
 

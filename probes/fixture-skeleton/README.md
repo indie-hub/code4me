@@ -14,7 +14,7 @@ cd /tmp/code4me-probe-fixture/
 # then open Claude Code here and paste the probe's Input prompt
 ```
 
-Do not commit `.wolf/` or `.code4me/` into the skeleton — those should remain absent so probes also exercise cold-start behaviour.
+Do not commit `.code4me/`, `.codegraph/`, or `.cocoindex_code/` into the skeleton; those should remain absent so probes also exercise cold-start behaviour.
 
 ## Which probes need which files
 

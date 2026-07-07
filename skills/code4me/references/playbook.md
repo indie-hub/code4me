@@ -9,7 +9,7 @@ Read this when you hit a decision point the `SKILL.md` contract doesn't already 
 As of v0.6, each agent declares its own Context Pack requirements in a `context_queries:` frontmatter block. See `references/context-queries-schema.md` for the schema. At dispatch time, the orchestrator:
 
 1. **Reads the agent's `context_queries:`** — if present, resolve each query per the schema; if absent, fall back to the v0.5 imperative list below.
-2. **Resolves queries** — fetch artifacts from `.code4me/`, read OpenWolf state when `.wolf/` is configured, gather project-info from `CLAUDE.md` and project structure, emit declared dispatch reminders. Evaluate `when:` conditions against the dispatch's weight/mode to skip non-applicable queries.
+2. **Resolves queries** — fetch artifacts from `.code4me/`, query Basic Memory when its MCP tools are available, gather project-info from `CLAUDE.md` and project structure, emit declared dispatch reminders. Evaluate `when:` conditions against the dispatch's weight/mode to skip non-applicable queries.
 3. **Assembles the Context Pack** from resolved results.
 4. **Records provenance** for every resolved query in the dispatch-log line under `context_provenance` per `references/context-queries-schema.md` §Resolution provenance — `query_kind`, `query_descriptor`, `resolved_artifact`, `resolved_sha` (when in git), and `skipped` for queries that evaluated but resolved to no content. The audit tool reads this to answer "what was in the Context Pack for this dispatch?"
 5. **Appends universal items** that every dispatch needs regardless of agent:
@@ -159,13 +159,15 @@ The project's own `CLAUDE.md` (root or hierarchical) layers on top via Claude Co
 
 ## Tooling preferences (orchestrator detail)
 
-When OpenWolf is configured (`.wolf/` at project root), the orchestrator's first stops in order:
+When Basic Memory is available, query it for durable prior decisions, recurring
+fixes, and user preferences before classifying weight, picking a team, or making
+architectural calls. Persist new durable lessons back through Basic Memory.
 
-1. **`.wolf/cerebrum.md`** — accumulated user preferences and Do-Not-Repeat patterns. Especially before classifying weight, picking a team, or making architectural calls; cerebrum often pre-decides routing.
-2. **`.wolf/anatomy.md`** — read this before opening any project file; summaries usually suffice for state-tracker reads, register queries, and Conversation-note lookups.
-3. **`.wolf/buglog.json`** — if the work touches an area with prior bugs.
-
-After OpenWolf: LSP queries for code-symbol navigation, configured MCPs for project-shape-specific queries, then `Read`/`Grep`/`Glob` as fallbacks. The canonical hierarchy lives in `tooling.md`; the same preferences apply to every subagent you dispatch.
+For source-code lookup, prefer codegraph for exact graph-shaped questions and
+CocoIndex for semantic or fuzzy discovery. LSP is legacy optional. Use
+context-mode for derived analysis and large non-source outputs after a code
+index has narrowed the target. The canonical hierarchy lives in `tooling.md`;
+the same preferences apply to every subagent you dispatch.
 
 ## Artifact persistence detail
 
@@ -180,4 +182,6 @@ Maintain a `.code4me/` working dir at the project root containing:
 
 Update the tracker on every state change. Persist artifacts before declaring a task complete.
 
-If OpenWolf is installed (a `.wolf/` directory exists at the project root), ensure the new `.code4me/` artifacts are reflected in `.wolf/anatomy.md` so subsequent reads benefit from OpenWolf's index. After creating new artifacts, an `openwolf scan` (or relying on the hook-driven auto-update if scan-on-write is enabled) keeps the index current. Without this, the orchestrator's own state files cost full token reads every time you check them.
+If Basic Memory is configured, save durable decisions and recurring project
+lessons there. `.code4me/` remains the local workflow source of truth; Basic
+Memory is the cross-session knowledge layer.

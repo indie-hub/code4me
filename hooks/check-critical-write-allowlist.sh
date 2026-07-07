@@ -103,13 +103,12 @@ c4m_debug "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] tool=[$TOOL_NAME] raw_CLAUDE_PROJECT
 # bounds the *codebase* changes (Tech Spec modules-in-scope + Test Spec paths),
 # not the orchestrator's own bookkeeping. Per the STRICT PROTOCOL, orchestrator
 # writes are confined to .code4me/ (milestone tracker, specs, dispatch log, hook
-# state files) and .wolf/ (OpenWolf cerebrum updates when a required-change
-# INSIGHT lands). Without this carve-out, every such write would ask-gate as
+    # state files and basic-memory notes). Without this carve-out, every such write would ask-gate as
 # "out of scope" during a Critical milestone.
 _FOLDED_PROJECT_DIR="$(c4m_fold "$PROJECT_DIR")"
 case "$(c4m_fold "$ABS_TARGET")" in
-    "$_FOLDED_PROJECT_DIR"/.code4me/* | "$_FOLDED_PROJECT_DIR"/.wolf/*)
-        c4m_debug "  EXEMPT orchestrator state dir (.code4me/ or .wolf/) -> pass-through"
+    "$_FOLDED_PROJECT_DIR"/.code4me/*)
+        c4m_debug "  EXEMPT orchestrator state dir (.code4me/) -> pass-through"
         emit_pass_through
         ;;
 esac

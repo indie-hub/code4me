@@ -15,12 +15,13 @@ context_queries:
     filter: milestone={milestone_id}
     relevance: this-role
     limit: 5
-  - kind: openwolf
-    file: cerebrum
-    sections: [security-conventions, do-not-repeat-security]
-  - kind: openwolf
-    file: buglog
-    relevance: security-related
+  - kind: basic-memory
+    query: "user preferences, project conventions, and do-not-repeat guidance: security-conventions, do-not-repeat-security"
+    purpose: user-preferences
+    limit: 5
+  - kind: basic-memory
+    query: "prior failure modes, incidents, and recurring fixes for security-related"
+    purpose: prior-fixes
     limit: 10
   - kind: project-info
     type: diff-range
@@ -105,7 +106,7 @@ If a required field for the selected mode is missing, return `outcome: BLOCKED` 
 
 ## Tooling preferences
 
-Follow the tooling hierarchy in `references/tooling.md`. First stop when OpenWolf is configured: `.wolf/cerebrum.md` for accumulated user preferences and `.wolf/buglog.json` for any prior security incidents on this surface. Canonical sequence after that: LSP for code symbols (especially `findReferences` on auth functions and credential paths), configured MCPs for project-shape queries (dependency manifests, CI configurations), then `Read`/`Grep`/`Glob` as fallbacks.
+Follow the tooling hierarchy in `references/tooling.md`. First stop when Basic Memory is configured: search durable notes for user preferences, prior decisions, Do-Not-Repeat patterns, and prior security incidents on this surface. For source code, use codegraph first for exact symbol graphs, CocoIndex second for semantic source discovery, optional legacy LSP only when configured, then `Read`/`Grep`/`Glob` as fallbacks.
 
 `grep` is especially valuable for secrets archaeology — patterns like `password\s*=\s*["']`, `secret\s*=\s*`, `API_KEY`, `aws_access_key`, private-key headers (`-----BEGIN`). Run them against the diff in `diff-focused` mode and against the whole surface in `comprehensive`.
 

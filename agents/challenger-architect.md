@@ -31,16 +31,18 @@ context_queries:
     filter: milestone={milestone_id}
     relevance: this-role
     limit: 5
-  - kind: openwolf
-    file: cerebrum
-    sections: [architecture-conventions, prior-critiques]
-  - kind: openwolf
-    file: buglog
-    relevance: surface
+  - kind: basic-memory
+    query: "user preferences, project conventions, and do-not-repeat guidance: architecture-conventions, prior-critiques"
+    purpose: user-preferences
     limit: 5
-  - kind: openwolf
-    file: anatomy
-    relevance: full-project
+  - kind: basic-memory
+    query: "prior failure modes, incidents, and recurring fixes for surface"
+    purpose: prior-fixes
+    limit: 5
+  - kind: basic-memory
+    query: "project anatomy, module map, and conventions for full-project"
+    purpose: project-conventions
+    limit: 5
   - kind: project-info
     type: claude-md
     relevance: project-root
@@ -82,9 +84,9 @@ If any are missing, return `outcome: BLOCKED` with `blocker: <missing field>`.
 
 ## Tooling preferences
 
-Follow the tooling hierarchy in `references/tooling.md`. First stop when OpenWolf is configured: `.wolf/cerebrum.md` for accumulated user preferences and Do-Not-Repeat patterns. Canonical sequence after that: LSP for code symbols, configured MCPs for project-shape queries, then `Read`/`Grep`/`Glob` as fallbacks.
+Follow the tooling hierarchy in `references/tooling.md`. First stop when Basic Memory is configured: search durable notes for user preferences, prior decisions, and Do-Not-Repeat patterns. For source code, use codegraph first for exact symbol graphs, CocoIndex second for semantic source discovery, optional legacy LSP only when configured, then `Read`/`Grep`/`Glob` as fallbacks.
 
-For pressure-testing, `.wolf/buglog.json` is particularly valuable — prior failure modes are the strongest generator of substantive critiques and named alternatives.
+For pressure-testing, Basic Memory prior-fixes notes are particularly valuable — prior failure modes are the strongest generator of substantive critiques and named alternatives.
 
 ## Mandatory Critique Rule
 

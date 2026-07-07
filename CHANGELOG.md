@@ -4,6 +4,23 @@ All notable changes to this plugin will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.2-dev] — in progress
+
+### Added
+
+- **`bin/code4me-install-deps`** — opt-in dependency checker/installer for macOS, Linux/WSL, and Windows Git Bash. Default mode is read-only status; `--install core|memory|indexes|agents|claude-wrapper|all` runs explicit package-manager commands only for the selected group.
+- **Claude wrapper docs/preflight** — documents [indie-hub/claude-wrapper](https://github.com/indie-hub/claude-wrapper) as the optional `claude-p` backend for Codex-orchestrated local Claude Code consultation.
+- **Codex-as-orchestrator prompt guidance** — code4me skill references now explain when a Codex Producer may route an Anthropic/Claude-side role through a configured local `claude-p` worker, and how to degrade/block when `claude-p` is unavailable.
+
+- **Claude wrapper subprocess helper** — adds `bin/code4me-claude-wrapper-run` as the bounded Codex-to-`claude-p` invocation path.
+- **Codex quickstart and hooks template** — adds `docs/howto-run-with-codex.md`, `docs/howto-use-codex-hooks.md`, and `templates/project-starter/codex-hooks.json.example`.
+
+### Changed
+
+- README and manifests now advertise `0.13.2-dev`.
+
+- Recommended MCP defaults no longer include `sequential-thinking`.
+
 ## [0.13.1-dev] — in progress
 
 **audit4me Phase 1** — the first real auditing. On top of Phase 0's committed data model and read-only surface, this ships a single-vendor (`anthropic`), single-category (`bugs`) audit sweep via `/audit4me-run`, validating the whole architecture end-to-end: deterministic outer loop (bash + `jq`) + per-file judgment (the `code4me-audit-orchestrator` subagent) + atomic, resume-safe persistence. No proposed fixes yet — findings are surfaced for review only (multi-vendor agreement is Phase 2, failing tests Phase 3, `/audit4me-apply` Phase 4).

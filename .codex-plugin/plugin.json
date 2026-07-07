@@ -1,0 +1,35 @@
+{
+  "name": "code4me",
+  "version": "0.13.2-dev",
+  "description": "Multi-agent SDLC orchestration with workflow weights, quality gates, and optional cross-vendor bridge skills.",
+  "author": {
+    "name": "Bruno"
+  },
+  "license": "MIT",
+  "keywords": [
+    "sdlc",
+    "multi-agent",
+    "orchestrator",
+    "engineering",
+    "cross-vendor"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "code4me",
+    "shortDescription": "Structured SDLC workflows and review gates for coding agents.",
+    "longDescription": "code4me classifies work by weight, routes specialist skills, persists local workflow artifacts, and can coordinate optional Codex or DeepSeek bridge roles for cross-vendor review.",
+    "developerName": "Bruno",
+    "category": "Productivity",
+    "capabilities": [
+      "Code",
+      "Write",
+      "Review"
+    ],
+    "defaultPrompt": [
+      "Classify this change with code4me.",
+      "Run a Standard code4me workflow.",
+      "Review this milestone with code4me."
+    ],
+    "brandColor": "#2563EB"
+  }
+}

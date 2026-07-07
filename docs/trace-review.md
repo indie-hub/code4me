@@ -16,7 +16,7 @@ Hamel Husain's highest-ROI evals advice is "spend 30 minutes reading 20–50 tra
 1. **Transparency announcement matches the dispatched team.** Open the milestone's first dispatch in the log; cross-reference with the orchestrator's announced team. Mismatches mean either the announcement is stale or the orchestrator dispatched off-script. Both are framework bugs.
 2. **Return outcomes are typed correctly.** Every dispatch's `outcome` should be one of the enum values for that subagent. Untyped or paraphrased outcomes mean the subagent didn't follow its contract — surface as an INSIGHT or a probe addition.
 3. **Hook gates map to expected typed outcomes.** When a hook fires (visible in the transcript), the developer's return should map to `TEST_QUESTION` / `FORBIDDEN_CONDITION_ENCOUNTERED` / `OUT_OF_SCOPE_TARGET` per the hook. A `BLOCKED` outcome with a vague blocker is the bug.
-4. **Context Pack provenance** (`context_provenance` field, v0.8+) shows the expected artifacts. For a Standard dispatch, you should see the Tech Spec, the Test Spec, the relevant cerebrum sections (if OpenWolf), and the language guidance for affected file types. Missing items mean a `context_queries:` block isn't resolving what it should.
+4. **Context Pack provenance** (`context_provenance` field, v0.8+) shows the expected artifacts. For a Standard dispatch, you should see the Tech Spec, the Test Spec, relevant Basic Memory results when configured, and the language guidance for affected file types. Missing items mean a `context_queries:` block isn't resolving what it should.
 
 ### Tier 2 — when the milestone surprised you
 
@@ -67,7 +67,7 @@ Husain's 30-minute number is realistic if you're reading active milestones. For 
 
 - 5 minutes running the audit tool and identifying which traces matter
 - 20 minutes reading 5-10 specific dispatches (the ones the audit tool flagged)
-- 5 minutes writing up observations as INSIGHTs (for cerebrum or the insight register) or as proposed changes to the framework
+- 5 minutes writing up observations as INSIGHTs (for Basic Memory or the insight register) or as proposed changes to the framework
 
 The biggest mistake is reading every trace in the log — that's hours, low signal. Read the ones the audit tool flagged.
 
@@ -75,7 +75,7 @@ The biggest mistake is reading every trace in the log — that's hours, low sign
 
 Three outputs:
 
-1. **Cerebrum updates** (if OpenWolf is configured). When a pattern is a project-specific preference ("we prefer the table-driven pattern for these tests"; "this module's auth flow is non-obvious"), record it in `.wolf/cerebrum.md` so the next dispatch picks it up.
+1. **Basic Memory updates** (if configured). When a pattern is a project-specific preference ("we prefer the table-driven pattern for these tests"; "this module's auth flow is non-obvious"), record it with Basic Memory so the next dispatch picks it up.
 2. **INSIGHT register entries.** For workflow-level observations ("Spec-to-Test consistently under-specifies failure paths for AC #X"), append to the milestone's insight-register file with `impact_tier: suggested change` or `required change before next similar task`.
 3. **Framework changes.** When a pattern is the framework itself ("Architects deviate to high on Critical 90% of the time → bump the default tier in model-selection.yaml"), the trace-review surfaces it; the change goes in a new cut.
 

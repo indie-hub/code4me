@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# code4me-claude-wrapper-run -- bounded claude-p subprocess helper for Codex.
+#
+# Usage:
+#   bin/code4me-claude-wrapper-run --prompt-file prompt.md [--cwd DIR]
+#   bin/code4me-claude-wrapper-run --prompt "role prompt" [--cwd DIR]
+#   bin/code4me-claude-wrapper-run --dry-run --prompt "role prompt"
+
+set -u
+
+CLAUDE_P_BIN="${CLAUDE_P_BIN:-claude-p}"
+TIMEOUT_SEC=300
+CWD="$PWD"
+MODEL=""
+SESSION_ID=""
+RAW_LOG=""
+PROMPT=""
+PROMPT_FILE=""
+DRY_RUN=0
+
+die() { printf 'code4me-claude-wrapper-run: %s\n' "$*" >&2; exit 2; }
+
+usage() {
+    sed -n '/^# Usage:/,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+need_value() {
+    [ "$#" -ge 2 ] || die "$1 requires a value"
+}
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --prompt)
+            need_value "$@"
+            PROMPT="$2"
+            shift
+            ;;
+        --prompt-file)
+            need_value "$@"
+            PROMPT_FILE="$2"
+            shift
+            ;;
+        --cwd)
+            need_value "$@"
+            CWD="$2"
+            shift
+            ;;
+        --timeout-sec)
+            need_value "$@"
+            TIMEOUT_SEC="$2"
+            shift
+            ;;
+        --model)
+            need_value "$@"
+            MODEL="$2"
+            shift
+            ;;
+        --session-id)
+            need_value "$@"
+            SESSION_ID="$2"
+            shift
+            ;;
+        --raw-log)
+            need_value "$@"
+            RAW_LOG="$2"
+            shift
+            ;;
+        --dry-run)
+            DRY_RUN=1
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            die "unknown arg: $1 (try --help)"
+            ;;
+    esac
+    shift
+done
+
+[ -n "$PROMPT" ] && [ -n "$PROMPT_FILE" ] && die "use --prompt or --prompt-file, not both"
+
+if [ -n "$PROMPT_FILE" ]; then
+    [ -r "$PROMPT_FILE" ] || die "prompt file is not readable: $PROMPT_FILE"
+    PROMPT="$(cat "$PROMPT_FILE")"
+elif [ -z "$PROMPT" ] && [ ! -t 0 ]; then
+    PROMPT="$(cat)"
+fi
+
+[ -n "$PROMPT" ] || die "empty prompt"
+[ -d "$CWD" ] || die "cwd is not a directory: $CWD"
+
+case "$TIMEOUT_SEC" in
+    ''|*[!0-9]*) die "--timeout-sec must be a positive integer" ;;
+    0) die "--timeout-sec must be a positive integer" ;;
+esac
+
+if [ "$DRY_RUN" -eq 0 ]; then
+    command -v "$CLAUDE_P_BIN" >/dev/null 2>&1 || die "claude-p not found on PATH (or set CLAUDE_P_BIN)"
+fi
+
+cmd=( "$CLAUDE_P_BIN" --output-format json --timeout-sec "$TIMEOUT_SEC" --cwd "$CWD" )
+[ -n "$MODEL" ] && cmd+=( --model "$MODEL" )
+[ -n "$SESSION_ID" ] && cmd+=( --session-id "$SESSION_ID" )
+[ -n "$RAW_LOG" ] && cmd+=( --raw-log "$RAW_LOG" )
+cmd+=( "$PROMPT" )
+
+if [ "$DRY_RUN" -eq 1 ]; then
+    printf 'DRY-RUN:'
+    printf ' %q' "${cmd[@]}"
+    printf '\n'
+    exit 0
+fi
+
+exec "${cmd[@]}"

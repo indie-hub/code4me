@@ -12,8 +12,9 @@
 #               with `bash <PLUGIN_ROOT>/hooks/<name>.sh`. Strips any prior code4me
 #               hook entries first (so stale/placeholder paths are replaced, never
 #               duplicated). Other settings + non-code4me hooks are preserved.
-#   2. LSP    — regenerates <project>/.lsp.json tailored to THIS platform and the
-#               LSP servers actually found on PATH:
+#   2. LSP    — legacy optional. With --with-lsp, regenerates
+#               <project>/.lsp.json tailored to THIS platform and the LSP
+#               servers actually found on PATH:
 #                 * C#   : roslyn-language-server(.cmd on Windows)
 #                 * Swift: `xcrun sourcekit-lsp` (macOS) | `sourcekit-lsp` (Linux/WSL)
 #                 * C/C++: clangd — wrapped by the node didopen-proxy on Windows
@@ -25,7 +26,7 @@
 # would change without writing.
 #
 # Usage:
-#   code4me-install [--project DIR] [--dry-run] [--no-hooks] [--no-lsp]
+#   code4me-install [--project DIR] [--dry-run] [--no-hooks] [--with-lsp]
 #                   [--lsp-all] [--clang-proxy auto|always|never]
 #
 # Requires: bash, jq. (node is only needed at LSP runtime for the C++ proxy.)
@@ -40,12 +41,13 @@ PLUGIN_ROOT="$( cd "${SCRIPT_DIR}/.." && pwd )"
 
 # ---- args ----
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
-DRY_RUN=0; DO_HOOKS=1; DO_LSP=1; LSP_ALL=0; CLANG_PROXY="auto"
+DRY_RUN=0; DO_HOOKS=1; DO_LSP=0; LSP_ALL=0; CLANG_PROXY="auto"
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --project) PROJECT_DIR="$2"; shift 2 ;;
         --dry-run) DRY_RUN=1; shift ;;
         --no-hooks) DO_HOOKS=0; shift ;;
+        --with-lsp) DO_LSP=1; shift ;;
         --no-lsp) DO_LSP=0; shift ;;
         --lsp-all) LSP_ALL=1; shift ;;
         --clang-proxy) CLANG_PROXY="$2"; shift 2 ;;
@@ -104,10 +106,8 @@ if [ "$DO_HOOKS" -eq 1 ]; then
             {type:"command", command:("bash "+$root+"/hooks/check-test-protection.sh")},
             {type:"command", command:("bash "+$root+"/hooks/check-forbidden-conditions.sh")},
             {type:"command", command:("bash "+$root+"/hooks/check-critical-write-allowlist.sh")} ]},
-        { matcher:"Read|Grep|Edit|Write|MultiEdit|Bash", hooks:[
-            {type:"command", command:("bash "+$root+"/hooks/check-buglog-helper.sh")} ]},
         { matcher:"Read|Grep|mcp__plugin_context-mode_context-mode__ctx_execute|mcp__plugin_context-mode_context-mode__ctx_execute_file|mcp__plugin_context-mode_context-mode__ctx_batch_execute", hooks:[
-            {type:"command", command:("bash "+$root+"/hooks/check-lsp-first-on-source.sh")} ]}
+            {type:"command", command:("bash "+$root+"/hooks/check-structural-first-on-source.sh")} ]}
       ]')"
     NEW_SS="$(jq -n --arg root "$PLUGIN_ROOT" '[
         { hooks:[ {type:"command", command:("bash "+$root+"/hooks/check-session-wiring.sh")} ] } ]')"
@@ -115,14 +115,16 @@ if [ "$DO_HOOKS" -eq 1 ]; then
     # Merge: drop any prior code4me hook commands (replace stale paths), keep the
     # rest, then append fresh blocks. Idempotent across PreToolUse + SessionStart.
     MERGED="$(printf '%s' "$EXISTING" | jq --argjson pre "$NEW_PRE" --argjson ss "$NEW_SS" '
-      def ours: test("/hooks/(check-test-protection|check-forbidden-conditions|check-critical-write-allowlist|check-buglog-helper|check-lsp-first-on-source|check-session-wiring)\\.sh");
+      def managed_hook_name: test("/hooks/(check-test-protection|check-forbidden-conditions|check-critical-write-allowlist|check-lsp-first-on-source|check-structural-first-on-source|check-session-wiring)\\.sh");
+      def old_code4me_hook: test("code4me[^[:space:]\"]*/hooks/check-[^[:space:]\"]+\\.sh");
+      def ours: managed_hook_name or old_code4me_hook;
       def strip(arr): [ arr[] | .hooks = [ .hooks[] | select((.command // "") | ours | not) ] | select((.hooks | length) > 0) ];
       .hooks //= {} |
       .hooks.PreToolUse   = ( strip(.hooks.PreToolUse   // []) + $pre ) |
       .hooks.SessionStart = ( strip(.hooks.SessionStart // []) + $ss )
       ')"
     backup_write "$SETTINGS" "$MERGED"
-    note "wired 5 PreToolUse hooks (3 write-protection + buglog + lsp-first) + 1 SessionStart detector at $PLUGIN_ROOT/hooks/"
+    note "wired 4 PreToolUse hooks (3 write-protection + structural-first) + 1 SessionStart detector at $PLUGIN_ROOT/hooks/"
     printf '\n'
 fi
 
@@ -210,6 +212,6 @@ if [ "$DO_LSP" -eq 1 ]; then
     printf '\n'
 fi
 
-printf 'Done. Verify in Claude Code with /hooks (hooks) and by opening a source file (LSP).\n'
+printf 'Done. Verify in Claude Code with /hooks. Use --with-lsp only for legacy LSP setup.\n'
 [ "$DRY_RUN" -eq 1 ] && printf '(dry-run — no files changed)\n'
 exit 0

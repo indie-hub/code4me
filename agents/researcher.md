@@ -18,12 +18,13 @@ context_queries:
     filter: milestone={milestone_id}
     relevance: this-role
     limit: 3
-  - kind: openwolf
-    file: cerebrum
-    sections: [prior-research, do-not-repeat-researcher]
-  - kind: openwolf
-    file: buglog
-    relevance: research-question
+  - kind: basic-memory
+    query: "user preferences, project conventions, and do-not-repeat guidance: prior-research, do-not-repeat-researcher"
+    purpose: user-preferences
+    limit: 5
+  - kind: basic-memory
+    query: "prior failure modes, incidents, and recurring fixes for research-question"
+    purpose: prior-fixes
     limit: 3
   - kind: project-info
     type: claude-md
@@ -56,7 +57,7 @@ If any are missing, return `outcome: BLOCKED` with `blocker: <missing field>`. D
 
 ## Tooling preferences
 
-Follow the tooling hierarchy in `references/tooling.md`. First stop when OpenWolf is configured: `.wolf/cerebrum.md` for accumulated user preferences and Do-Not-Repeat patterns. Canonical sequence after that: LSP for code symbols, configured MCPs for project-shape queries, then `Read`/`Grep`/`Glob` as fallbacks.
+Follow the tooling hierarchy in `references/tooling.md`. First stop when Basic Memory is configured: search durable notes for user preferences, prior decisions, and Do-Not-Repeat patterns. For source code, use codegraph first for exact symbol graphs, CocoIndex second for semantic source discovery, optional legacy LSP only when configured, then `Read`/`Grep`/`Glob` as fallbacks.
 
 For desk-based research specifically, external tools — web search and web fetch for prior art, library evaluations, RFCs, regulatory references — are typically more valuable than project-internal navigation, though LSP and `Read`/`Grep` remain useful when the question asks "how does our codebase do X today?" before considering alternatives.
 

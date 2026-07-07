@@ -18,7 +18,7 @@
 #     to exercise drive-letter detection, backslash separators, and the
 #     case-insensitive fold.
 #
-# Requires: bash 4+, jq. Exits non-zero on any failure.
+# Requires: bash and jq. Exits non-zero on any failure.
 
 set -u
 
@@ -88,7 +88,7 @@ out="$(CLAUDE_PROJECT_DIR="$PROOT" run_hook check-critical-write-allowlist.sh Ed
 # case-sensitivity preserved on POSIX (must NOT fold): different case -> out of scope
 out="$(CLAUDE_PROJECT_DIR="$PROOT" run_hook check-critical-write-allowlist.sh Edit "$PROOT/SRC/AUTH/Login.cs")";   assert "case differs (posix sensitive)" ask "$out"
 out="$(CLAUDE_PROJECT_DIR="$PROOT" run_hook check-critical-write-allowlist.sh Edit "$PROOT/.code4me/milestone-status-tracker-M05.md")"; assert ".code4me bookkeeping exempt" pass "$out"
-out="$(CLAUDE_PROJECT_DIR="$PROOT" run_hook check-critical-write-allowlist.sh Edit "$PROOT/.wolf/cerebrum.md")"; assert ".wolf state exempt" pass "$out"
+out="$(CLAUDE_PROJECT_DIR="$PROOT" run_hook check-critical-write-allowlist.sh Edit "$PROOT/.code4me/basic-memory/decision.md")"; assert ".code4me memory exempt" pass "$out"
 
 echo "== e2e POSIX: test-protection =="
 out="$(CLAUDE_PROJECT_DIR="$PROOT" run_hook check-test-protection.sh Edit "$PROOT/tests/AuthTest.cs")";  assert "protected test edit" ask  "$out"
@@ -115,7 +115,7 @@ out="$(run_hook check-critical-write-allowlist.sh Edit 'C:\proj\src\auth\Login.c
 out="$(run_hook check-critical-write-allowlist.sh Edit 'C:\proj\src\billing\Charge.cs')"; assert "win out-of-scope"           ask  "$out"
 out="$(run_hook check-critical-write-allowlist.sh Edit 'C:\proj\SRC\AUTH\Login.cs')";    assert "win in-scope (case-insens)" pass "$out"
 out="$(run_hook check-critical-write-allowlist.sh Edit 'C:\proj\.code4me\milestone-status-tracker-M05.md')"; assert "win .code4me exempt" pass "$out"
-out="$(run_hook check-critical-write-allowlist.sh Edit 'C:\proj\.wolf\cerebrum.md')"; assert "win .wolf exempt" pass "$out"
+out="$(run_hook check-critical-write-allowlist.sh Edit 'C:\proj\.code4me\basic-memory\decision.md')"; assert "win .code4me memory exempt" pass "$out"
 
 echo "== e2e WINDOWS: test-protection =="
 out="$(run_hook check-test-protection.sh Edit 'C:\proj\tests\AuthTest.cs')"; assert "win protected test" ask  "$out"

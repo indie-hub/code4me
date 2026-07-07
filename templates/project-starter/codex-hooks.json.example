@@ -1,0 +1,45 @@
+{
+  "_destination": "Copy to <project>/.codex/hooks.json, replace <PLUGIN_DIR> with this checkout's absolute path, then run /hooks in Codex to review/trust project hooks.",
+  "_note": "Codex hooks are command hooks. This template mirrors the Claude write-protection hooks where Codex exposes compatible tool payloads, and keeps the structural-first hook in front of source-code reads/searches.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "apply_patch|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash <PLUGIN_DIR>/hooks/check-test-protection.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash <PLUGIN_DIR>/hooks/check-forbidden-conditions.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash <PLUGIN_DIR>/hooks/check-critical-write-allowlist.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|mcp__plugin_context-mode_context-mode__ctx_execute|mcp__plugin_context-mode_context-mode__ctx_execute_file|mcp__plugin_context-mode_context-mode__ctx_batch_execute|mcp__context_mode__ctx_execute|mcp__context_mode__ctx_execute_file|mcp__context_mode__ctx_batch_execute",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash <PLUGIN_DIR>/hooks/check-structural-first-on-source.sh"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash <PLUGIN_DIR>/hooks/check-session-wiring.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

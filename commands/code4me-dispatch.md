@@ -14,7 +14,7 @@ Procedure:
    - **Weight check:** solo applies to Conversation, Light, and Standard. If the declared weight is Critical, refuse the solo part (Critical's full-team floor is non-negotiable), announce why, and proceed with normal Critical dispatch.
    - **Auto-escalation check (step 6) runs first:** if escalation raises the weight to Critical, solo is dropped with an announcement. If it raises to Standard, solo continues at Standard semantics (verification gate, test-gate-first, decomposition).
    - When both `--solo` and `--cross-vendor` are present, run the retained gate on the opposite vendor per `references/solo-mode.md` §"Composition".
-5. Treat the remaining text as the task description. Consult cerebrum if OpenWolf is configured.
+5. Treat the remaining text as the task description. Consult Basic Memory if its MCP tools are configured.
 6. Run classification on **kind only** (Bug Fix / Tech Debt / Spike / Incident / Scope Change / product). The weight is already declared.
 7. Apply auto-escalation override per `references/auto-escalation.md` — if a symptom class fires and the declared weight is below the floor, raise to the floor and announce the escalation. Do NOT ask the user; the override is non-negotiable.
 8. Decide the team per `references/team-templates.md` + hard floors. In solo mode the "team" is the orchestrator inline plus the retained gate (combined-reviewer for Conversation/Light, verification for Standard) plus any escalation-mandated subagents. Resolve vendor (cross-vendor policy if enabled) and tier (per `references/model-selection.yaml`).

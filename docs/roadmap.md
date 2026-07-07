@@ -32,7 +32,7 @@ These were ear-tagged during the v0.11 cycle and didn't make the cut. Could ship
 **Target version:** v0.11.1 or v0.12.x  
 **Scope:** ~30 lines in `bin/code4me-audit-dispatch-log`
 
-A "Cross-vendor health" section breaking down per-vendor ask-gate rate, pairing degradation rate, and outcome distribution. Mirrors the existing Trivial and LSP-first surveillance sections.
+A "Cross-vendor health" section breaking down per-vendor ask-gate rate, pairing degradation rate, and outcome distribution. Mirrors the existing Trivial and structural-first surveillance sections.
 
 CHANGELOG reference: v0.11.0-dev "Open questions deferred to v0.11.x".
 
@@ -63,7 +63,7 @@ CHANGELOG reference: v0.11.0-dev "Open questions deferred to v0.11.x".
 **Scope:** ~3-line patch per hook + one paragraph in each `docs/howto-*.md`  
 **Idea source:** `affaan-m/ECC`'s `ECC_HOOK_PROFILE` and `ECC_DISABLED_HOOKS`
 
-`CODE4ME_HOOK_PROFILE=minimal|standard|strict` + `CODE4ME_DISABLED_HOOKS="check-lsp-first-on-source,..."` so a user can flip any hook off for a single session without uninstalling. **Trigger condition:** ask-gate noise becomes a real complaint during soak.
+`CODE4ME_HOOK_PROFILE=minimal|standard|strict` + `CODE4ME_DISABLED_HOOKS="check-structural-first-on-source,..."` so a user can flip any hook off for a single session without uninstalling. **Trigger condition:** ask-gate noise becomes a real complaint during soak.
 
 CHANGELOG reference: v0.11.0-dev "Open questions deferred to v0.11.x".
 
@@ -79,7 +79,7 @@ These were ear-tagged during the v0.12 cycle. Most are observability or polish; 
 **Target version:** v0.12.1  
 **Scope:** ~30 lines in the audit tool
 
-Counts milestones with/without `acceptance_criteria:` block, average ACs per milestone, orphan dispatches (tasks not in any AC's `tasks_touching` array). Mirror of Trivial + LSP-first surveillance sections.
+Counts milestones with/without `acceptance_criteria:` block, average ACs per milestone, orphan dispatches (tasks not in any AC's `tasks_touching` array). Mirror of Trivial + structural-first surveillance sections.
 
 CHANGELOG reference: v0.12.0-dev "Open questions deferred to v0.12.x".
 
@@ -113,25 +113,22 @@ Layer C (post-validation diff scan) landed in v0.13.0-dev and catches all on-dis
 
 Verified facts about the vendor hook systems:
 
-- **Codex CLI has lifecycle hooks** at `~/.codex/hooks.json` (and `<repo>/.codex/hooks.json`). Five events: `SessionStart`, `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`. Enabled via `[features] codex_hooks = true` in `config.toml`. Hooks receive JSON on stdin (shape near-identical to Claude Code); can return `permissionDecision: "deny"` to block. **Critical limitations:**
-  - `PreToolUse` currently fires only for the `Bash` tool. Doesn't intercept file writes (`Write`), MCP, or `WebSearch`. Codex docs: *"useful guardrail rather than a complete enforcement boundary."*
-  - Only `deny` is supported. `allow`, `ask`, `updatedInput`, `additionalContext` parse but fail open.
-  - Experimental. Windows currently disabled.
+- **Codex CLI has lifecycle hooks** through `hooks.json` and inline `[hooks]` config at user/project/plugin layers. Hooks are enabled by default; disable with `[features] hooks = false` (`codex_hooks` is the deprecated alias). `PreToolUse`, `PermissionRequest`, and `PostToolUse` support command handlers for `Bash`, `apply_patch`/edit aliases, and MCP tool names. `SessionStart`, `UserPromptSubmit`, and `Stop` are also parsed; prompt/agent handlers are skipped. Project/plugin hooks require the normal Codex trust review.
 
 - **Reasonix has lifecycle hooks** at `<project>/.reasonix/` (per-project) and `~/.reasonix/config.json` (global). Four events confirmed from README: `PreToolUse` (gating), `PostToolUse`, `UserPromptSubmit`, `Stop`. **Coverage unknown** — what reasonix's `PreToolUse` actually intercepts (Bash-only like codex? all tools? a specific subset?) needs verification from the bundled docs (`<install>/REASONIX.md` or `<install>/docs/`) before wiring.
 
 The build:
 
 1. **Verify reasonix `PreToolUse` coverage.** Read `REASONIX.md` and `<install>/docs/`. Confirm which tools `PreToolUse` intercepts and what `permissionDecision` values are supported. ~half day depending on doc clarity.
-2. **Build codex-side hooks** (`hooks/codex/check-test-protection-on-bash.sh`, `hooks/codex/check-critical-write-on-bash.sh`, `hooks/codex/check-forbidden-conditions-on-bash.sh`). Each parses the Bash command, greps for paths matching protected/allowlist/forbidden patterns, returns `deny` on violation. Mirrors Claude-side logic but operates on shell-command strings rather than tool-call JSON.
-3. **Ship `templates/codex-hooks.json.example`** wiring all three hooks under `PreToolUse` matcher `Bash`. Document the manual install step (no auto-wire — codex hooks are user-configured, not project-shipped, to respect codex's hook-tier semantics).
+2. **Build a Codex payload adapter** only if the current Claude-shaped hook payload parsing proves insufficient on real Codex `apply_patch` and MCP events. Keep existing hooks as the source of truth.
+3. **Soak `templates/project-starter/codex-hooks.json.example`** wiring the Claude parity hooks under Codex-supported matchers. Keep manual install/trust review; do not auto-wire project hooks yet.
 4. **Build reasonix-side hooks** if and only if step 1 confirms reasonix's `PreToolUse` intercepts something useful. Same shape; vendor-specific config format.
 5. **Probes**: `probes/cross-vendor/10-codex-side-hooks-fire-on-bash-violation.md`, plus reasonix-side probe if applicable.
-6. **Preflight checks**: detect whether codex hooks are wired (`[features] codex_hooks = true` AND a hooks.json file exists), surface as warn-level when not.
+6. **Preflight checks**: detect whether Codex hook files are present/trusted where possible, surface as warn-level when not.
 
 **Decision pending before build:** opt-in (user manually copies hooks.json.example) vs auto-wire (extend `/code4me-init` to scaffold codex hooks if codex CLI is detected). Roadmap default: opt-in (less invasive). Defer the call until v0.14 build starts.
 
-**Why this is meaningfully more work than Layer C was:** codex hooks require a feature flag, a separate config file format (TOML for the flag + JSON for the hooks), and Bash-command parsing rather than file-path matching. Reasonix is a separate ecosystem on top of that. Layer C's helper script is vendor-agnostic; Layer B has to be vendor-specific.
+**Why this is meaningfully more work than Layer C was:** Codex and Claude hook payloads are close, but parity still needs real-event testing across `apply_patch`, `Bash`, and MCP calls. Reasonix is a separate ecosystem on top of that. Layer C's helper script is vendor-agnostic; Layer B has to be vendor-specific.
 
 **Why it's worth doing eventually:** pre-call interception is strictly better than post-call detection where it covers. A protected test that codex would `rm` via Bash gets `deny`ed before the `rm` runs, rather than after. Layer C catches it either way (deterministically); Layer B catches it earlier (probabilistically — bounded by what each vendor's PreToolUse actually intercepts).
 
@@ -153,7 +150,7 @@ Referenced in `skills/code4me/references/housekeeping.md` §"Resume-protocol com
 **Target version:** v0.12.x  
 **Scope:** ~30 lines in the audit tool
 
-Counts READY / READY-WITH-NOTES / NOT-READY verdicts across the project's manifest history; surfaces persistent NOT-READY patterns (e.g., dispatches not getting tracked properly). Mirror of Trivial + LSP-first + (future) decomposition-health + (future) cross-vendor-health surveillance sections.
+Counts READY / READY-WITH-NOTES / NOT-READY verdicts across the project's manifest history; surfaces persistent NOT-READY patterns (e.g., dispatches not getting tracked properly). Mirror of Trivial + structural-first + (future) decomposition-health + (future) cross-vendor-health surveillance sections.
 
 Referenced in `skills/code4me/references/housekeeping.md` §"Audit-tool integration".
 
@@ -199,7 +196,7 @@ Pre-indexed cross-language knowledge graph (tree-sitter → SQLite + FTS5) with 
 
 Complementary to LSP, not a replacement (LSP keeps live diagnostics, completion, full type inference).
 
-**Trigger condition for revisiting:** if the LSP-first hook's ask-gate rate stays above ~30% of dispatch volume after a month of soak. That signals agents are asking task-shaped questions LSP doesn't answer well — `codegraph_context` is the stronger redirect target.
+**Trigger condition for revisiting:** if the structural-first hook's ask-gate rate stays above ~30% of dispatch volume after a month of soak. That signals agents are asking task-shaped questions LSP doesn't answer well — `codegraph_context` is the stronger redirect target.
 
 **Costs to adopt:** another dependency (Node + npm + per-project `.codegraph/` SQLite), a third "code-knowledge" surface (alongside LSP and context-mode) requiring updated precedence rules in `references/code-consultation-precedence.md`, and the codegraph project's maturity risk (552 stars, 0 releases, 237 commits — active but young).
 
@@ -215,7 +212,7 @@ A few observations across the current ear-tag set:
 2. **Four items are probes.** Healthy ratio — probes are the spec; new behaviour should always have a probe.
 3. **Only one item is a behavioural orchestrator change** (the cross-vendor bridge post-validation). The rest are observability, portability, or community-infra. That's a sign the orchestrator core is in a stable shape; remaining work is polish.
 4. **No vendor additions are ear-tagged.** Three vendors (Anthropic, OpenAI via codex-bridge, DeepSeek via deepseek-bridge) is the right number for now. A fourth would be high-leverage only if it differs qualitatively from the three — a privacy-focused local-only inference vendor would qualify; another OpenAI-compatible API wouldn't.
-5. **Two items have explicit trigger conditions.** CodeGraph (LSP-first ask-gate rate >30% for a month) and Hook runtime gating (ask-gate noise becomes a complaint). The rest are pure prioritisation — they ship when someone has the appetite to ship them. The trigger-gated items are the most resistant to scope creep because the condition is measurable.
+5. **Two items have explicit trigger conditions.** CodeGraph/CocoIndex (structural-first ask-gate rate >30% for a month) and Hook runtime gating (ask-gate noise becomes a complaint). The rest are pure prioritisation — they ship when someone has the appetite to ship them. The trigger-gated items are the most resistant to scope creep because the condition is measurable.
 
 ---
 
@@ -265,7 +262,7 @@ Four mitigations landed:
 
 1. **`.gitattributes`** with `*.sh` / `*.bash` / `*.json` / `*.jsonl` / `*.yaml` / `*.md` / `*.py` / `*.mjs` forced to `eol=lf`. Prevents CRLF corruption on Windows clones. Hook scripts and bin scripts now have line-ending discipline at the repo level.
 2. **`bin/code4me-preflight` check 0: Platform.** Detects OS + shell environment (Linux / macOS / Windows + WSL / Windows + Git Bash / unknown). Reported as the first preflight check so users can confirm their setup. Warns on Git Bash and unknown environments with pointers to the Windows how-to.
-3. **`docs/howto-windows.md`** — full Diataxis how-to: pick WSL or Git Bash, install dependencies (jq, Node, Codex, Reasonix, codegraph), verify with preflight, known quirks (`$CLAUDE_PROJECT_DIR` path translation, CRLF on legacy clones, PowerShell launch issues), reporting Windows issues, when native Windows might happen.
+3. **`docs/howto-windows.md`** — full Diataxis how-to: pick WSL or Git Bash, install dependencies (`code4me-install-deps`, jq, Node, Codex, Reasonix, codegraph, optional `claude-p` wrapper), verify with preflight, known quirks (`$CLAUDE_PROJECT_DIR` path translation, CRLF on legacy clones, PowerShell launch issues), reporting Windows issues, when native Windows might happen.
 4. **CONTRIBUTING.md Windows manual-test checklist.** Four-item list contributors run on Windows before merging changes that touch hooks/, bin/, or .gitattributes: line endings, shebang execution, preflight Platform line, path-handling.
 
 Path-translation edge case (`\` → `/` normalization in `$CLAUDE_PROJECT_DIR`) **remains deferred** until empirical Windows-soak reports surface it.

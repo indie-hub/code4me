@@ -100,3 +100,11 @@ Typical substitutions when cross-vendor pairing is enabled:
 Cross-vendor invocations are announced with `codex-bridge[role] (codex:tier, mode=...)` notation in the transparency line. The bridge's `BLOCKED` outcomes have typed `blocker_type` values that map cleanly to the orchestrator's circuit breakers; see `skills/codex-bridge/SKILL.md` "Failure modes" and each per-role reference's "Validation" section.
 
 When you spawn a subagent, pass it only the Context Pack content appropriate to its weight and role. Do not pass the full superset.
+
+### Codex orchestrator with local Claude
+
+When Codex is the orchestrator and a Claude-side role is selected, route it
+through a configured local `claude-p` worker only if the user asked for
+Claude/local-Claude participation or cross-vendor policy selected Anthropic for
+that role. Missing `claude-p` degrades or blocks per
+`cross-vendor-policy.md` §"Codex as orchestrator".

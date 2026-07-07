@@ -18,15 +18,15 @@ quiet "$(CLAUDE_PROJECT_DIR="$T" bash "$HOOK")" "no config -> {}"
 
 echo "== silent when correctly wired =="
 mkdir -p "$T/.claude"
-printf '{"hooks":{"PreToolUse":[{"matcher":"Edit","hooks":[{"type":"command","command":"bash %s/hooks/check-buglog-helper.sh"}]}]}}' "$ROOT" > "$T/.claude/settings.json"
+printf '{"hooks":{"PreToolUse":[{"matcher":"Read|Grep","hooks":[{"type":"command","command":"bash %s/hooks/check-structural-first-on-source.sh"}]}]}}' "$ROOT" > "$T/.claude/settings.json"
 quiet "$(CLAUDE_PROJECT_DIR="$T" bash "$HOOK")" "valid wiring -> {}"
 
 echo "== nudges on unsubstituted <PLUGIN_DIR> =="
-printf '{"hooks":{"PreToolUse":[{"matcher":"Edit","hooks":[{"type":"command","command":"bash <PLUGIN_DIR>/hooks/check-buglog-helper.sh"}]}]}}' > "$T/.claude/settings.json"
+printf '{"hooks":{"PreToolUse":[{"matcher":"Read|Grep","hooks":[{"type":"command","command":"bash <PLUGIN_DIR>/hooks/check-structural-first-on-source.sh"}]}]}}' > "$T/.claude/settings.json"
 nudges "$(CLAUDE_PROJECT_DIR="$T" bash "$HOOK")" "<PLUGIN_DIR> -> nudge"
 
 echo "== nudges on missing hook path =="
-printf '{"hooks":{"PreToolUse":[{"matcher":"Edit","hooks":[{"type":"command","command":"bash /gone/hooks/check-buglog-helper.sh"}]}]}}' > "$T/.claude/settings.json"
+printf '{"hooks":{"PreToolUse":[{"matcher":"Read|Grep","hooks":[{"type":"command","command":"bash /gone/hooks/check-structural-first-on-source.sh"}]}]}}' > "$T/.claude/settings.json"
 nudges "$(CLAUDE_PROJECT_DIR="$T" bash "$HOOK")" "missing path -> nudge"
 
 echo "== nudges on invalid .lsp.json + never writes =="

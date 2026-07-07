@@ -36,7 +36,7 @@ if [ -r "$SETTINGS" ] && jq -e . "$SETTINGS" >/dev/null 2>&1; then
         esac
         [ -r "$cmdpath" ] || PROBLEMS="${PROBLEMS}  - settings.json hook path missing: ${cmdpath}\n"
     done < <(jq -r '.hooks.PreToolUse[]?.hooks[]?.command // empty
-                    | select(test("/hooks/(check-test-protection|check-forbidden-conditions|check-critical-write-allowlist|check-buglog-helper|check-lsp-first-on-source)\\.sh"))
+                    | select(test("/hooks/(check-test-protection|check-forbidden-conditions|check-critical-write-allowlist|check-lsp-first-on-source|check-structural-first-on-source)\\.sh") or test("code4me[^[:space:]\"]*/hooks/check-[^[:space:]\"]+\\.sh"))
                     | sub("^bash +";"")' "$SETTINGS" 2>/dev/null)
 fi
 

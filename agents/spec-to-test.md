@@ -30,12 +30,14 @@ context_queries:
     filter: milestone={milestone_id}
     relevance: this-role
     limit: 5
-  - kind: openwolf
-    file: cerebrum
-    sections: [testing-conventions, do-not-repeat-spec-to-test]
-  - kind: openwolf
-    file: anatomy
-    relevance: test-infrastructure
+  - kind: basic-memory
+    query: "user preferences, project conventions, and do-not-repeat guidance: testing-conventions, do-not-repeat-spec-to-test"
+    purpose: user-preferences
+    limit: 5
+  - kind: basic-memory
+    query: "project anatomy, module map, and conventions for test-infrastructure"
+    purpose: project-conventions
+    limit: 5
   - kind: project-info
     type: claude-md
     relevance: project-root
@@ -84,7 +86,7 @@ If any are missing, return `outcome: BLOCKED` with `blocker: <missing field>`. D
 
 ## Tooling preferences
 
-Follow the tooling hierarchy in `references/tooling.md`. First stop when OpenWolf is configured: `.wolf/cerebrum.md` for accumulated user preferences and Do-Not-Repeat patterns. Canonical sequence after that: LSP for code symbols, configured MCPs for project-shape queries, then `Read`/`Grep`/`Glob` as fallbacks.
+Follow the tooling hierarchy in `references/tooling.md`. First stop when Basic Memory is configured: search durable notes for user preferences, prior decisions, and Do-Not-Repeat patterns. For source code, use codegraph first for exact symbol graphs, CocoIndex second for semantic source discovery, optional legacy LSP only when configured, then `Read`/`Grep`/`Glob` as fallbacks.
 
 If MCPs are configured, look for test-runner integrations or fixture/factory discovery MCPs that can surface existing conventions faster than raw search.
 

@@ -43,6 +43,6 @@ Procedure:
    - Files skipped (paths + reason "already exists")
    - What `code4me-install` wired: hooks in `.claude/settings.json`, LSP servers detected/written to `.lsp.json`, and any servers it skipped (with install hints).
    - Next steps: edit the `PLACEHOLDER`/`<...>` sections of `CLAUDE.md`; uncomment any `_disabled_by_default` MCP entries in `.mcp.json` you want to use; set any required env vars (`GITHUB_PERSONAL_ACCESS_TOKEN`, etc.); run `/code4me-preflight` to confirm the wiring resolves; in Claude Code, `/hooks` shows the registered hooks.
-   - Note: `code4me-install` configures LSP *clients* but does not *install* the language-server binaries — see README "LSP support" for install routes per language you use. Re-run `code4me-install` after installing a server to pick it up.
+   - Note: `code4me-install` wires project hooks. Legacy LSP is opt-in via `--with-lsp`; helper CLI status lives in `bash <PLUGIN_DIR>/bin/code4me-install-deps --check`.
 
 If any step fails (permission, missing template, etc.), stop and surface the error clearly. Do not partially scaffold.

@@ -10,7 +10,7 @@ The plugin ships three opt-in PreToolUse hooks that move specific protections fr
 
 ## Setup
 
-**Recommended: run the installer instead of editing by hand.** `bash <PLUGIN_DIR>/bin/code4me-install --project <your-project>` self-locates the plugin, writes the correct absolute paths, merges idempotently (no duplicates, stale paths replaced), and also generates a platform-correct `.lsp.json`. Use `--dry-run` to preview; it backs up to `.bak`. The manual steps below are the fallback if you'd rather wire it yourself.
+**Recommended: run the installer instead of editing by hand.** `bash <PLUGIN_DIR>/bin/code4me-install --project <your-project>` self-locates the plugin, writes the correct absolute paths, and merges idempotently (no duplicates, stale paths replaced). Use `--with-lsp` only for legacy LSP setup. Use `--dry-run` to preview; it backs up to `.bak`. The manual steps below are the fallback if you'd rather wire it yourself.
 
 Add the following to your project's `.claude/settings.json` (or merge into the existing `hooks` block). Replace `<PLUGIN_DIR>` with the absolute path to this plugin's checkout:
 

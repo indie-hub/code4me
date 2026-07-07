@@ -111,7 +111,7 @@ For canonical implementation tasks:
 - Relevant test artifacts
 - Non-goals
 - Available MCPs (if any) and when to prefer each
-- Tooling reminder (LSP, OpenWolf, MCPs over fallback tools)
+- Tooling reminder (Basic Memory, codegraph, CocoIndex, MCPs, context-mode order, fallbacks)
 - Dispatched model (per `model-selection.md`)
 
 For documentation tasks, additionally:

@@ -18,7 +18,7 @@ code4me has `code-reviewer`, `verification`, `qa`, and `security-reviewer` subag
 
 audit4me runs on **the whole codebase**, **outside of any milestone**, **as a batch job that can take hours**. It's not gating new work — it's continuously surfacing existing latent issues. The audit categories overlap with the quality gates' concerns (bugs, security, code quality), but the framing is different: "find things we haven't fixed yet" vs. "is this new change OK to ship."
 
-The two products share infrastructure: the dispatch log, the cross-vendor bridges (codex-bridge, deepseek-bridge), the hooks (protected tests, forbidden conditions, critical-write allowlist), OpenWolf integration, the LSP layer. audit4me is a consumer of code4me's plumbing; it doesn't reimplement.
+The two products share infrastructure: the dispatch log, the cross-vendor bridges (codex-bridge, deepseek-bridge), the hooks (protected tests, forbidden conditions, critical-write allowlist), Basic Memory integration, and the code-index layer. audit4me is a consumer of code4me's plumbing; it doesn't reimplement.
 
 ## Cross-vendor: 2-vendor minimum, configurable
 
@@ -77,7 +77,7 @@ The main session, loaded with the audit4me skill, does:
    2. **Subagent returns:** `{ findings[], updated_coverage_entry, insight? }`.
    3. **Bash:** write `findings/<id>.md`; `jq`-update `audit-coverage.json`; append `audit-events.jsonl`.
 3. **Bash:** aggregate events for this run; compute summary metrics.
-4. **Inline LLM call** (single Haiku turn or main-session turn): cluster findings into themes; flag any cross-file patterns worth surfacing as cerebrum candidates.
+4. **Inline LLM call** (single Haiku turn or main-session turn): cluster findings into themes; flag any cross-file patterns worth surfacing as Basic Memory candidates.
 5. **Bash:** write `morning-report.md`.
 6. **Return:** one-line summary to the user.
 

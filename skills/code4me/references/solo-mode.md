@@ -126,7 +126,7 @@ Aborts are logged as an INSIGHT (`impact: informational` unless a pattern emerge
 - **Cross-vendor pairing:** composes well, and is the recommended pairing for solo when enabled — run the retained gate on the *other* vendor (combined-reviewer or verification via codex-bridge / deepseek-bridge per `cross-vendor-policy.md`). Producer (orchestrator, Anthropic) and verifier (other vendor) land on opposite vendors, which is the alternation rule's intent. Same opt-in gate as always.
 - **Trello sync:** unchanged. Cards move through the same states; solo implementation entries appear in card descriptions like any dispatch.
 - **Spec Kit interop:** unchanged at intake.
-- **OpenWolf:** cerebrum-first still applies before classifying or implementing.
+- **Basic Memory:** memory-first still applies before classifying or implementing when the MCP tools are available.
 - **Trivial:** unchanged and unaffected. Trivial is "no dispatch at all, whitelist-bounded"; solo is "implementation inline, gate dispatched, weight semantics intact". When a request is Trivial-eligible, classify Trivial — don't run solo for what the whitelist already covers.
 
 ## When to recommend against solo

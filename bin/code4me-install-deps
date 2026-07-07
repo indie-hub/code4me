@@ -1,0 +1,219 @@
+#!/usr/bin/env bash
+# code4me-install-deps -- check or install optional code4me helper CLIs.
+#
+# Usage:
+#   bin/code4me-install-deps --check
+#   bin/code4me-install-deps --dry-run --install all
+#   bin/code4me-install-deps --install core|memory|indexes|agents|claude-wrapper|all
+#
+# Default is --check. Installs are explicit and limited to package-manager
+# commands shown before execution.
+set -u
+
+DRY_RUN=0
+INSTALL_CORE=0
+INSTALL_MEMORY=0
+INSTALL_INDEXES=0
+INSTALL_AGENTS=0
+INSTALL_CLAUDE_WRAPPER=0
+
+die() { printf 'code4me-install-deps: %s\n' "$*" >&2; exit 1; }
+have() { command -v "$1" >/dev/null 2>&1; }
+
+case "$(uname -s 2>/dev/null)" in
+    Darwin*) PLATFORM=macos ;;
+    Linux*)
+        if [ -n "${WSL_DISTRO_NAME:-}" ] || grep -qi microsoft /proc/version 2>/dev/null; then
+            PLATFORM=wsl
+        else
+            PLATFORM=linux
+        fi
+        ;;
+    MINGW*|MSYS*|CYGWIN*) PLATFORM=windows ;;
+    *) PLATFORM=unknown ;;
+esac
+
+usage() {
+    sed -n '/^# Usage:/,/^# Default/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+select_group() {
+    case "$1" in
+        core) INSTALL_CORE=1 ;;
+        memory) INSTALL_MEMORY=1 ;;
+        indexes) INSTALL_INDEXES=1 ;;
+        agents) INSTALL_AGENTS=1 ;;
+        claude-wrapper) INSTALL_CLAUDE_WRAPPER=1 ;;
+        all)
+            INSTALL_CORE=1
+            INSTALL_MEMORY=1
+            INSTALL_INDEXES=1
+            INSTALL_AGENTS=1
+            INSTALL_CLAUDE_WRAPPER=1
+            ;;
+        *) die "unknown install group: $1" ;;
+    esac
+}
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --check) ;;
+        --dry-run) DRY_RUN=1 ;;
+        --install)
+            [ "$#" -ge 2 ] || die "--install requires a group"
+            select_group "$2"
+            shift
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *) die "unknown arg: $1 (try --help)" ;;
+    esac
+    shift
+done
+
+run_cmd() {
+    printf '  + %s\n' "$1"
+    [ "$DRY_RUN" -eq 1 ] && return 0
+    sh -c "$1"
+}
+
+missing_hint() {
+    printf '  ! %s\n' "$1"
+}
+
+status_cmd() {
+    local label cmd note
+    label="$1"
+    cmd="$2"
+    note="$3"
+    if have "$cmd"; then
+        printf 'ok      %-18s %s\n' "$label" "$(command -v "$cmd")"
+    else
+        printf 'missing %-18s %s\n' "$label" "$note"
+    fi
+}
+
+install_jq() {
+    have jq && return 0
+    case "$PLATFORM" in
+        macos)
+            if have brew; then
+                run_cmd "brew install jq"
+            else
+                missing_hint "install Homebrew or run: brew install jq"
+            fi
+            ;;
+        linux|wsl)
+            if have apt-get; then
+                run_cmd "sudo apt-get update && sudo apt-get install -y jq"
+            elif have brew; then
+                run_cmd "brew install jq"
+            else
+                missing_hint "install jq with your system package manager"
+            fi
+            ;;
+        windows)
+            if have choco; then
+                run_cmd "choco install jq -y --no-progress"
+            elif have winget; then
+                run_cmd "winget install --id jqlang.jq --accept-package-agreements --accept-source-agreements"
+            else
+                missing_hint "install jq with choco, winget, scoop, or Git Bash PATH"
+            fi
+            ;;
+        *) missing_hint "install jq with your system package manager" ;;
+    esac
+}
+
+install_basic_memory() {
+    if have basic-memory || have uvx; then
+        return 0
+    fi
+    if have uv; then
+        run_cmd "uv tool install basic-memory"
+    else
+        missing_hint "install uv/uvx, then configure MCP with: uvx basic-memory mcp"
+    fi
+}
+
+install_codegraph() {
+    have codegraph && return 0
+    if have npm; then
+        run_cmd "npm install -g @colbymchenry/codegraph"
+    else
+        missing_hint "install Node/npm, then: npm install -g @colbymchenry/codegraph"
+    fi
+}
+
+install_cocoindex() {
+    have ccc && return 0
+    if have uv; then
+        run_cmd "uv tool install --upgrade 'cocoindex-code[full]'"
+    elif have pipx; then
+        run_cmd "pipx install 'cocoindex-code[full]'"
+    else
+        missing_hint "install uv or pipx, then install cocoindex-code[full]"
+    fi
+}
+
+install_agents() {
+    if ! have codex; then
+        if have npm; then
+            run_cmd "npm install -g @openai/codex"
+        else
+            missing_hint "install Node/npm, then: npm install -g @openai/codex"
+        fi
+    fi
+    if ! have reasonix; then
+        if have npm; then
+            run_cmd "npm install -g reasonix"
+        else
+            missing_hint "install Node/npm, then: npm install -g reasonix"
+        fi
+    fi
+}
+
+install_claude_wrapper() {
+    have claude-p && return 0
+    if have npm; then
+        run_cmd "npm install -g github:indie-hub/claude-wrapper"
+    else
+        missing_hint "install Node/npm, then: npm install -g github:indie-hub/claude-wrapper"
+    fi
+}
+
+printf 'code4me dependency check\n'
+printf 'platform: %s%s\n\n' "$PLATFORM" "$([ "$DRY_RUN" -eq 1 ] && printf ' (dry-run)')"
+
+status_cmd "jq" jq "required for install/audit/probe scripts"
+status_cmd "git" git "required for clone and bridge diff scan"
+status_cmd "claude" claude "required for Claude Code / claude-p workflows"
+status_cmd "python3" python3 "optional for legacy LSP handshake checks"
+status_cmd "node" node "optional for clangd proxy and Node-based CLIs"
+status_cmd "npm" npm "optional installer for Codex, Reasonix, codegraph, claude-wrapper"
+status_cmd "uvx" uvx "optional runner for Basic Memory MCP"
+status_cmd "basic-memory" basic-memory "optional persistent memory CLI"
+status_cmd "codegraph" codegraph "optional structural source index"
+status_cmd "ccc" ccc "optional CocoIndex Code CLI"
+status_cmd "codex" codex "optional OpenAI cross-vendor bridge"
+status_cmd "reasonix" reasonix "optional DeepSeek cross-vendor bridge"
+status_cmd "claude-p" claude-p "optional local Claude wrapper for Codex orchestration"
+
+if [ "$INSTALL_CORE$INSTALL_MEMORY$INSTALL_INDEXES$INSTALL_AGENTS$INSTALL_CLAUDE_WRAPPER" = "00000" ]; then
+    printf '\nNo installs requested. Use --install <group> to install missing tools.\n'
+    exit 0
+fi
+
+printf '\nInstalling requested groups:\n'
+[ "$INSTALL_CORE" -eq 1 ] && install_jq
+[ "$INSTALL_MEMORY" -eq 1 ] && install_basic_memory
+if [ "$INSTALL_INDEXES" -eq 1 ]; then
+    install_codegraph
+    install_cocoindex
+fi
+[ "$INSTALL_AGENTS" -eq 1 ] && install_agents
+[ "$INSTALL_CLAUDE_WRAPPER" -eq 1 ] && install_claude_wrapper
+
+printf '\nDone. Re-run bin/code4me-install-deps --check and bin/code4me-preflight.\n'

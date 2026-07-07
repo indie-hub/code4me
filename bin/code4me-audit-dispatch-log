@@ -140,46 +140,41 @@ if [ "$SOLO_INLINE_COUNT" -gt 0 ]; then
     printf '\n'
 fi
 
-# LSP-first surveillance (v0.10.5+).
-# Reads .code4me/lsp-first-events.jsonl (written by check-lsp-first-on-source.sh
-# when the hook ask-gates a symbol-shaped ctx_execute / ctx_execute_file /
-# ctx_batch_execute against a source-extension declared in .lsp.json). High
-# ask-gate rate relative to dispatch volume signals that subagents are still
-# defaulting to context-mode for symbol queries — the redirect to LSP isn't
-# being internalised. >20% (events ÷ dispatches) is a drift threshold.
-LSP_EVENTS_LOG="$(dirname "$LOG")/lsp-first-events.jsonl"
-if [ -r "$LSP_EVENTS_LOG" ]; then
-    LSP_EVENT_COUNT=$(wc -l < "$LSP_EVENTS_LOG" | tr -d ' ')
-    if [ "$LSP_EVENT_COUNT" -gt 0 ]; then
-        LSP_RATIO=$(awk -v e="$LSP_EVENT_COUNT" -v n="$TOTAL" 'BEGIN { printf "%.1f", (e/n)*100 }')
-        printf '## LSP-first surveillance (v0.10.5+)\n\n'
-        printf 'Ask-gates fired by `check-lsp-first-on-source.sh`: **%s** (ratio to dispatches: %s%%)\n\n' "$LSP_EVENT_COUNT" "$LSP_RATIO"
+# Structural-first surveillance (v0.13.1+).
+# Reads .code4me/structural-first-events.jsonl. High ask-gate rate relative to
+# dispatch volume signals that subagents are still defaulting to context-mode,
+# Read, or Grep before codegraph/CocoIndex for source-code lookup.
+STRUCTURAL_EVENTS_LOG="$(dirname "$LOG")/structural-first-events.jsonl"
+if [ -r "$STRUCTURAL_EVENTS_LOG" ]; then
+    STRUCTURAL_EVENT_COUNT=$(wc -l < "$STRUCTURAL_EVENTS_LOG" | tr -d ' ')
+    if [ "$STRUCTURAL_EVENT_COUNT" -gt 0 ]; then
+        STRUCTURAL_RATIO=$(awk -v e="$STRUCTURAL_EVENT_COUNT" -v n="$TOTAL" 'BEGIN { printf "%.1f", (e/n)*100 }')
+        printf '## Structural-first surveillance (v0.13.1+)\n\n'
+        printf 'Ask-gates fired by `check-structural-first-on-source.sh`: **%s** (ratio to dispatches: %s%%)\n\n' "$STRUCTURAL_EVENT_COUNT" "$STRUCTURAL_RATIO"
 
-        # Threshold check: > 20% suggests subagents still default to ctx_execute
-        # for symbol queries instead of reaching for LSP.
-        OVER_LSP_THRESHOLD=$(awk -v e="$LSP_EVENT_COUNT" -v n="$TOTAL" 'BEGIN { print (e/n > 0.20) }')
-        if [ "$OVER_LSP_THRESHOLD" = "1" ]; then
-            printf '> **⚠ LSP-first ask-gate rate exceeds 20%% of dispatch volume.**\n> Subagents are still reaching for `ctx_execute` / `ctx_execute_file` to do symbol queries\n> on source files where LSP could give a structural answer in one call. Review the\n> patterns below and consider strengthening the precedence rule in\n> `references/code-consultation-precedence.md`, or tightening the toolbelt\n> scope of developer/code-reviewer/verification.\n\n'
+        OVER_STRUCTURAL_THRESHOLD=$(awk -v e="$STRUCTURAL_EVENT_COUNT" -v n="$TOTAL" 'BEGIN { print (e/n > 0.20) }')
+        if [ "$OVER_STRUCTURAL_THRESHOLD" = "1" ]; then
+            printf '> **⚠ Structural-first ask-gate rate exceeds 20%% of dispatch volume.**\n> Subagents are still reaching for context-mode, Read, or Grep before codegraph/CocoIndex\n> on source-code lookup. Review the patterns below and consider strengthening the precedence rule in\n> `references/code-consultation-precedence.md`, or tightening the toolbelt\n> scope of developer/code-reviewer/verification.\n\n'
         fi
 
         # Per-shape breakdown.
         printf '### Ask-gate shape breakdown\n\n'
         printf '| Reason | Count |\n|---|---:|\n'
-        jq -r '.reason' "$LSP_EVENTS_LOG" 2>/dev/null | sort | uniq -c | sort -rn | \
+        jq -r '.reason' "$STRUCTURAL_EVENTS_LOG" 2>/dev/null | sort | uniq -c | sort -rn | \
             awk '{ count = $1; $1 = ""; sub(/^[[:space:]]+/, ""); printf "| %s | %s |\n", $0, count }'
         printf '\n'
 
         # Per-tool breakdown.
         printf '### Ask-gates by tool\n\n'
         printf '| Tool | Count |\n|---|---:|\n'
-        jq -r '.tool' "$LSP_EVENTS_LOG" 2>/dev/null | sort | uniq -c | sort -rn | \
+        jq -r '.tool' "$STRUCTURAL_EVENTS_LOG" 2>/dev/null | sort | uniq -c | sort -rn | \
             awk '{ count = $1; $1 = ""; sub(/^[[:space:]]+/, ""); printf "| `%s` | %s |\n", $0, count }'
         printf '\n'
 
         # Recent samples (last 5).
         printf '### Recent ask-gates (last 5)\n\n'
-        tail -5 "$LSP_EVENTS_LOG" | jq -r '"- `\(.ts)` [\(.reason)]: `\(.haystack_head // "")`"' 2>/dev/null
-        printf '\n_If many recent entries are LSP carve-outs (regex-in-comments, cross-language, fuzzy search), proceed-rate is expected and not drift. If they are symbol-shaped queries that LSP could have answered, the redirect is being bypassed and the precedence rule needs reinforcement._\n\n'
+        tail -5 "$STRUCTURAL_EVENTS_LOG" | jq -r '"- `\(.ts)` [\(.reason)]: `\(.haystack_head // "")`"' 2>/dev/null
+        printf '\n_If many recent entries are genuinely text-shaped searches, proceed-rate is expected and not drift. If they are source lookup queries that codegraph or CocoIndex could have narrowed, the precedence rule needs reinforcement._\n\n'
     fi
 fi
 

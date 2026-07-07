@@ -52,18 +52,18 @@ If a subagent's INSIGHT actually describes a defect, a blocker, a real scope cha
 
 If multiple INSIGHTs converge on the same upstream artifact within a short window, batch them. The upstream role should not receive a flood of single-fact messages where one summary would do.
 
-## Integration with OpenWolf cerebrum
+## Integration with Basic Memory
 
-If the project has OpenWolf installed (a `.wolf/` directory at the project root containing `cerebrum.md`), an INSIGHT with impact tier `required change before next similar task` is structurally identical to a Do-Not-Repeat entry. When you log such an INSIGHT to the per-milestone Insight Register, also append a corresponding line to `.wolf/cerebrum.md` under the appropriate section ("Do-Not-Repeat", "User Preferences", or "Key Learnings", depending on shape).
+If Basic Memory MCP tools are available, an INSIGHT with impact tier `required change before next similar task` is structurally identical to a durable Do-Not-Repeat note. When you log such an INSIGHT to the per-milestone Insight Register, also create or update a Basic Memory note under an appropriate project area such as "Do-Not-Repeat", "User Preferences", or "Key Learnings".
 
-The two stores have different jobs and don't redundantly duplicate. The Insight Register is per-milestone audit (which milestone, which task, which subagent surfaced it). `cerebrum.md` is cross-project memory: a `required` learning from milestone M03 should not have to be re-learned in milestone M04. Bridging them avoids that re-learning cost.
+The two stores have different jobs and don't redundantly duplicate. The Insight Register is per-milestone audit (which milestone, which task, which subagent surfaced it). Basic Memory is cross-session memory: a `required` learning from milestone M03 should not have to be re-learned in milestone M04. Bridging them avoids that re-learning cost.
 
-Format for the cerebrum.md append:
+Suggested Basic Memory note line:
 
 ```
 - {date}: {one-line distillation of the discovered fact} (source: INSIGHT {task_id})
 ```
 
-Do **not** append to `cerebrum.md` for `informational` or `suggested change` impact tiers — those stay in the Insight Register only. The cross-project memory should accumulate only learnings the user has effectively authorised by virtue of the `required` impact-tier label, since that tier already implies "change behaviour for the next similar task."
+Do **not** write Basic Memory notes for `informational` or `suggested change` impact tiers by default — those stay in the Insight Register only. Cross-session memory should accumulate only learnings the user has effectively authorised by virtue of the `required` impact-tier label, since that tier already implies "change behaviour for the next similar task."
 
-If the project does not use OpenWolf, this integration is a no-op; the Insight Register stands alone.
+If Basic Memory is unavailable, this integration is a no-op; the Insight Register stands alone.

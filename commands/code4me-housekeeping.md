@@ -17,7 +17,7 @@ Read `skills/code4me/references/housekeeping.md` for the full audit checklist an
    - **Artefact persistence** — every dispatched task referenced in the tracker has its corresponding artefact written (Tech Spec, Test Spec, Conversation Note as applicable).
    - **No orphan files** — every file under `.code4me/tech-specs/`, `test-specs/`, `conversation-notes/`, `milestone-specs/` is referenced from a tracker entry.
    - **Trello sync state** — if `.code4me/trello-config.json` exists, check `.code4me/trello-sync-errors.jsonl` for entries newer than the last successful sync. Note the last successful sync timestamp.
-   - **OpenWolf flush** — if `.wolf/cerebrum.md` exists, scan the insight register for `impact: required` entries from this session and confirm they appear in cerebrum.
+   - **Basic Memory flush** — if Basic Memory MCP tools are available, scan the insight register for `impact: required` entries from this session and confirm they were written or queued as durable Basic Memory notes.
    - **Hook state files** — `.code4me/protected-tests.txt`, `forbidden-conditions.json`, `critical-allowlist.txt` exist if and only if a milestone in scope requires them.
 
 3. **Surface pending user actions** — read the tracker and scan for:
@@ -64,7 +64,7 @@ Read `skills/code4me/references/housekeeping.md` for the full audit checklist an
 - Dispatch log: {N} entries, {X} in-flight {✓ | ⚠}
 - Milestone trackers: {N} active, {X} stale {✓ | ⚠}
 - Artefacts: {N} written this session, {X} orphan {✓ | ⚠}
-- INSIGHTs: {N} routed, {X} required-impact flushed to cerebrum {✓ | ⚠}
+- INSIGHTs: {N} routed, {X} required-impact flushed to Basic Memory {✓ | ⚠}
 - Hook state files: {applicable list and status}
 
 ## Trello sync ({if configured})

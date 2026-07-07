@@ -33,7 +33,7 @@ code4me's attack surface is primarily:
 
 - **Bugs that require pre-existing write access to `.code4me/`, `~/.claude/`, the plugin checkout, or the user's project source.** code4me operates as a trusted layer over a project the user already controls. If an attacker can write to those locations, they have already escalated past code4me's surface.
 - **Reasonix's, Codex's, and the LSP servers' own vulnerabilities.** These are third-party tools the plugin invokes. Report issues with those projects directly to their maintainers.
-- **MCP server vulnerabilities** (context-mode, Trello MCP, OpenWolf, etc.). Report to the respective project.
+- **MCP server vulnerabilities** (context-mode, Trello MCP, Basic Memory, CocoIndex, etc.). Report to the respective project.
 - **Issues caused by the user disabling the runtime hooks** (removing entries from `.claude/settings.json` or `hooks/hooks.json`). The hooks are defence-in-depth; disabling them is the user's choice and not a code4me vulnerability.
 - **The cost-of-operation risk** (an attacker tricking the orchestrator into dispatching expensive cross-vendor pairings). The dispatch gates require explicit user opt-in for bridge invocations; absent that opt-in, no bridge runs. Cost-management is part of the plugin's discipline, not a security boundary.
 

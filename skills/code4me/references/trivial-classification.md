@@ -64,7 +64,7 @@ Vague justifications are a signal that the classification is wrong. When in doub
 When Trivial classification fires:
 
 1. **Announce.** Transparency line per the format above.
-2. **Make the edit.** Direct `Edit` / `Write` tool call. This is the explicit carve-out from the STRICT PROTOCOL's "no production-file writes outside `.code4me/` and `.wolf/`" rule, gated by the Trivial classification and the recorded justification.
+2. **Make the edit.** Direct `Edit` / `Write` tool call. This is the explicit carve-out from the STRICT PROTOCOL's "no production-file writes outside `.code4me/` bookkeeping" rule, gated by the Trivial classification and the recorded justification. Durable memory uses Basic Memory MCP tools, not raw file edits.
 3. **Log to dispatch-log.jsonl** with:
    ```jsonl
    {"ts": "...", "milestone": "...", "task": "...", "weight": "Trivial",
@@ -101,7 +101,7 @@ Three structural protections so Trivial doesn't quietly absorb work that should 
 
 - **Auto-escalation override**: applies normally. Auth / migration / sensitive-data symptom classes lift Trivial to Standard immediately.
 - **Hooks**: applicable. The orchestrator's `Edit` tool call passes through `check-test-protection.sh`, `check-forbidden-conditions.sh`, and `check-critical-write-allowlist.sh`. If a Trivial edit accidentally targets a protected test or a Critical-allowlist-violating path, the hook ask-gates and the orchestrator should re-classify.
-- **OpenWolf cerebrum**: read first per the orchestrator's operating loop. Cerebrum may contain a Do-Not-Repeat entry that lifts the change above Trivial (e.g., "Don't bump versions without updating CHANGELOG.md too" → that's a multi-file rule; Trivial fails the whitelist).
+- **Basic Memory**: search first per the orchestrator's operating loop when available. Basic Memory may contain a Do-Not-Repeat note that lifts the change above Trivial (e.g., "Don't bump versions without updating CHANGELOG.md too" -> that's a multi-file rule; Trivial fails the whitelist).
 - **Cross-vendor pairing**: not applicable. Trivial is inline orchestrator work; no subagent means no producer/verifier pair.
 - **Spec Kit interop**: not applicable. Spec Kit produces specs for feature work; Trivial is below feature work.
 - **Trello sync**: applies the same as other weights. Card created at intake, moved to Done after edit. The card body includes the justification.

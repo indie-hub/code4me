@@ -62,13 +62,13 @@ For each milestone in `.code4me/milestone-status-tracker.md` with `state ≠ clo
   - Errors in this session → ⚠ "trello sync errors"; the manifest names the affected milestones.
 - If no `.code4me/trello-config.json` → skip (no Trello configured).
 
-### 7. OpenWolf flush
+### 7. Basic Memory flush
 
-- If `.wolf/cerebrum.md` exists:
+- If Basic Memory MCP tools are available:
   - Read the milestone's insight register for `impact: required change before next similar task` entries from this session.
-  - For each, search `.wolf/cerebrum.md` for the insight's text or topic.
-  - Required-impact INSIGHTs not in cerebrum → ⚠ "cerebrum not flushed"; recommend appending before close.
-- If no `.wolf/` → skip.
+  - For each, search Basic Memory for the insight's text or topic.
+  - Required-impact INSIGHTs not in Basic Memory -> "memory not flushed"; recommend writing a durable note before close.
+- If Basic Memory is unavailable -> skip.
 
 ### 8. Hook state files
 
@@ -159,14 +159,14 @@ For each pending action:
 - Milestone trackers updated: {count}
 - Artefacts written this session: {count}
 - INSIGHTs routed this session: {count}
-- Required-impact INSIGHTs flushed to `.wolf/cerebrum.md`: {count}
+- Required-impact INSIGHTs flushed to Basic Memory: {count}
 - Trello sync last successful: {ISO8601 or "N/A"}
 
 ## Resume guidance
 
 Specific to the verdict at generation:
 
-- If READY: any session can resume work; the orchestrator should consult cerebrum first (as always) and then proceed.
+- If READY: any session can resume work; the orchestrator should consult Basic Memory first (as always) and then proceed.
 - If READY-WITH-NOTES: address the pending actions before dispatching new work, OR explicitly defer them.
 
 ## File version
@@ -182,9 +182,9 @@ Multiple handoff manifests accumulate over time. Recommend periodic cleanup (man
 
 ## Resume protocol
 
-When a new Claude Code session opens against a project containing handoff manifests, the orchestrator's operating-loop step 1 ("Consult cerebrum first") extends to:
+When a new Claude Code session opens against a project containing handoff manifests, the orchestrator's operating-loop step 1 ("Consult Basic Memory first") extends to:
 
-1. If `.wolf/cerebrum.md` exists, read it (as always).
+1. If Basic Memory MCP tools are available, search them for current project context.
 2. List `.code4me/handoff-*.md` files. If any exist, read the **most recent one by ISO8601 timestamp**.
 3. The manifest's "Active milestones" and "Pending user actions" sections become the resumed context.
 4. The orchestrator does NOT need to re-read the full dispatch log to understand current state — the manifest pre-digests it.
@@ -197,7 +197,7 @@ This is the resume mechanism. The handoff manifest is the load-bearing piece —
 - **Mid-session crash leaves an in-flight dispatch.** Verdict NOT-READY; the user knows not to assume the milestone closed.
 - **Tracker drift** — orchestrator dispatched but forgot to update the tracker. AC state currency check flags it; the user sees a specific AC whose status is stale.
 - **Orphan artefacts** — a Tech Spec exists for a task the tracker doesn't know about (e.g., user manually wrote a file). Surfaces so the user can either delete the orphan or wire it into the tracker.
-- **Cerebrum drift** — a `required-impact` INSIGHT landed but the orchestrator forgot to flush to cerebrum. Caught at audit; cerebrum gets the entry before close.
+- **Basic Memory drift** — a `required-impact` INSIGHT landed but the orchestrator forgot to flush to Basic Memory. Caught at audit; Basic Memory gets the note before close.
 - **PROVISIONAL deadline approaching, no in-flight work** — the user might have forgotten about a Conversation Mode task awaiting promote-or-revert. Surfaced explicitly with the deadline timestamp.
 - **Trello drift** — Trello cards out of sync with the tracker (sync errors logged but ignored). Surfaced; user can re-run `/code4me-trello-init` or manually reconcile.
 
@@ -207,13 +207,13 @@ This is the resume mechanism. The handoff manifest is the load-bearing piece —
 - **Does not dispatch any subagent.** The audit is the orchestrator's own bookkeeping; subagents would be expensive and unnecessary.
 - **Does not roll back state on NOT-READY.** It just refuses to write the manifest. The user resolves the issues by dispatching the missing work or explicitly aborting (with `/code4me-status` to see the full state, or manual edits to the tracker).
 - **Does not modify Trello cards.** If Trello sync errors are surfaced, the user re-triggers sync via the next state-transition dispatch — not via housekeeping directly.
-- **Does not auto-flush cerebrum.** If a `required-impact` INSIGHT hasn't landed in cerebrum, housekeeping surfaces it but doesn't write to `.wolf/`. That's a user decision (some INSIGHTs may not need cerebrum scope; the orchestrator shouldn't assume).
+- **Does not auto-flush Basic Memory.** If a `required-impact` INSIGHT hasn't landed in Basic Memory, housekeeping surfaces it but doesn't write memory automatically. That's a user decision (some INSIGHTs may not need durable memory scope; the orchestrator shouldn't assume).
 
 ## Integration with the operating loop
 
 The housekeeping command is invoked explicitly by the user; the orchestrator does NOT auto-trigger it. However, the operating loop's step 9 "Confirm and close" can recommend `/code4me-housekeeping` if multiple state transitions happened in this session — the user can take that suggestion or skip.
 
-Step 1 "Consult cerebrum first" is extended (per the resume protocol above) to also consult the most recent handoff manifest if one exists.
+Step 1 "Consult Basic Memory first" is extended (per the resume protocol above) to also consult the most recent handoff manifest if one exists.
 
 ## Audit-tool integration (v0.12.x candidate, deferred)
 
@@ -221,6 +221,6 @@ A future audit-tool extension could read all handoff manifests in `.code4me/` an
 
 - How often verdicts are READY vs. READY-WITH-NOTES vs. NOT-READY.
 - Persistent NOT-READY patterns (suggests in-flight dispatches not getting tracked properly).
-- Cerebrum-flush lag (how often `required-impact` INSIGHTs are flagged but not yet flushed).
+- Basic Memory flush lag (how often `required-impact` INSIGHTs are flagged but not yet flushed).
 
 Out of scope for v0.12.0 — ear-tagged for v0.12.x.
