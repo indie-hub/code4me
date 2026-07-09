@@ -22,6 +22,10 @@ Preferred Basic Memory tools:
 - `write_note` or `edit_note` to persist durable decisions, postmortems, and
   reusable project guidance
 
+On startup, follow `memory-map.md`: search for a project memory map/index note,
+adapt to existing Basic Memory structure when present, and ask before writing a
+new map. Do not create empty bucket notes up front; use atomic tagged notes.
+
 Do not use memory as a substitute for source inspection. Memory answers "what
 have we learned before?" Code indexes answer "what does the repo do now?"
 

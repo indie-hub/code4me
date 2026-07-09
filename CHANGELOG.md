@@ -11,6 +11,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Codex plugin install now accepts bundled hook config: removed non-schema metadata fields from `hooks/hooks.json` and the Codex hooks template.
 - Bumped plugin manifests to avoid Codex reusing a cached `0.13.2-dev` install.
 
+### Added
+
+- Basic Memory map adoption protocol: on startup, code4me now searches for an existing memory map, proposes an adapter when project memory already exists, and only proposes the default map for empty memory stores.
+
 ## [0.13.2-dev]
 
 ### Added

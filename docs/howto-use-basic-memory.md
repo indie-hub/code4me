@@ -48,11 +48,19 @@ Export `BASIC_MEMORY_API_KEY` in the shell that launches Codex.
 
 When Basic Memory tools are available, the orchestrator should:
 
+- search for `code4me memory map`, `memory map`, or `memory index` first
+- follow an existing map when found
+- propose an adapter map when the project already has Basic Memory notes but no code4me map
+- propose the default code4me map when Basic Memory appears empty
 - use `search` or `search_notes` before classification and architecture decisions
 - use `build_context` for `memory://` URLs returned by search
 - use `write_note` or `edit_note` for required-impact INSIGHTs
 - include relevant prior decisions and recurring fixes in Context Packs
 - persist required-impact INSIGHTs as durable notes
+
+The orchestrator must ask before writing a new map. It should not mass-retag,
+rename, or migrate existing notes. See `skills/code4me/references/memory-map.md`
+for the default map and adapter template.
 
 Official docs:
 
