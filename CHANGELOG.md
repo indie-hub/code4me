@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Basic Memory map adoption protocol: on startup, code4me now searches for an existing memory map, proposes an adapter when project memory already exists, and only proposes the default map for empty memory stores.
+- Vertical slicing guidance: Standard/Critical decomposition now prefers Elephant Carpaccio-style user/API-observable slices over horizontal technical task breakdowns.
 
 ## [0.13.2-dev]
 
