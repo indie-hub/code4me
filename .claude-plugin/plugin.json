@@ -1,6 +1,6 @@
 {
   "name": "code4me",
-  "version": "0.13.3-dev",
+  "version": "0.13.4-dev",
   "description": "Multi-agent SDLC framework with Producer-as-orchestrator: classifies workflow weight (Trivial, Conversation, Light, Standard, Critical), dispatches specialist subagents, enforces quality gates and auto-escalation, routes INSIGHT messages upstream. Standard/Critical milestones decompose into ≥1 task per acceptance criterion (v0.12). Vendor-aware model tiers (low / mid / high) and opt-in three-vendor pairing across Anthropic + OpenAI (codex-bridge) + DeepSeek (deepseek-bridge, v0.11+). Runtime hooks cover test protection, conversation-mode forbidden conditions, critical-mode write allowlists, and structural-index-first source lookup. Trello sync projects per-AC state to a Kanban board (one card per acceptance criterion, v0.12).",
   "author": {
     "name": "Bruno"

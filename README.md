@@ -2,7 +2,7 @@
 
 **A multi-agent SDLC orchestrator for Claude Code and Codex.** Turn a one-line user request into a structured workflow: a lead architect designs, a challenger architect critiques, a spec-to-test engineer authors the test gate, a developer implements, and a quality-gate loop (verification + code review + QA) attests the work — all dispatched as agent roles, with optional cross-vendor pairing through OpenAI's Codex CLI or DeepSeek's Reasonix CLI for dialectic.
 
-**Status:** `0.13.3-dev` — actively soaking against real milestones. Public-release prep underway (Phase 1 portability done; Phase 2 community infrastructure landing now).
+**Status:** `0.13.4-dev` — actively soaking against real milestones. Public-release prep underway (Phase 1 portability done; Phase 2 community infrastructure landing now).
 
 ## What it does, concretely
 
@@ -124,7 +124,7 @@ The docs follow a [Diataxis](https://diataxis.fr/) split:
   - [Run on Windows](docs/howto-windows.md)
 - **[Reference](docs/reference.md)** — workflow weights, all subagents, slash commands, model tiers, cross-vendor pairing, runtime hooks, audit and analytics, context-query schema, dispatch log shape, folder layout.
 - **[Explanation](docs/explanation.md)** — design-decision rationale. Why five weights, why Co-Approval, why Producer-as-orchestrator, why opt-in cross-vendor, why hooks ask instead of deny.
-- **[Roadmap](docs/roadmap.md)** — ear-tagged work that's been considered, scoped, and intentionally deferred. Twelve active items as of v0.13.3-dev; explicit trigger conditions on the conditional ones.
+- **[Roadmap](docs/roadmap.md)** — ear-tagged work that's been considered, scoped, and intentionally deferred. Twelve active items as of v0.13.4-dev; explicit trigger conditions on the conditional ones.
 - **[audit4me design](docs/audit4me-design.md)** — sibling product spec. Batch, after-hours, cross-vendor codebase auditor. Proposes fixes; code4me applies them via Conversation Mode. Phase 0 (data model + read-only surface) shipped in v0.13.0-dev; Phase 1+ gated on code4me v0.12 soak.
 - **[audit4me build plan](docs/audit4me-build-plan.md)** — operational plan with per-phase sub-tasks, gates, open decisions, and rhythm. Living doc; updated as phases ship.
 

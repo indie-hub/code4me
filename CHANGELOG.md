@@ -4,7 +4,14 @@ All notable changes to this plugin will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.13.3-dev] — in progress
+## [0.13.4-dev] — in progress
+
+### Added
+
+- Vertical slicing guidance: Standard/Critical decomposition now prefers Elephant Carpaccio-style user/API-observable slices over horizontal technical task breakdowns.
+- Bumped plugin manifests to avoid Codex reusing a cached `0.13.3-dev` install.
+
+## [0.13.3-dev]
 
 ### Fixed
 
@@ -14,7 +21,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Basic Memory map adoption protocol: on startup, code4me now searches for an existing memory map, proposes an adapter when project memory already exists, and only proposes the default map for empty memory stores.
-- Vertical slicing guidance: Standard/Critical decomposition now prefers Elephant Carpaccio-style user/API-observable slices over horizontal technical task breakdowns.
 
 ## [0.13.2-dev]
 
