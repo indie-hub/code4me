@@ -4,9 +4,11 @@ All notable changes to this plugin will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.14.1-dev] — in progress
+## [0.14.2-dev] — in progress
 
 ### Fixed
+
+- Strip native Windows `jq` CRLF record terminators when reading held-out manifest paths and hashes, so verified probes run correctly under Git Bash.
 
 - Windows Git Bash held-out probe manifests now preserve POSIX paths during `jq` serialization and normalize drive-letter paths through `cygpath`; symlink-capability tests skip platforms that emulate `ln -s` as a copy.
 

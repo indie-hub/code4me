@@ -242,6 +242,7 @@ validate_manifest() {
         return 1
     fi
     while IFS=$'\t' read -r path expected; do
+        expected=${expected%$'\r'}
         if ! is_absolute_path "$path"; then
             printf 'error: held-out probe path must be absolute: %s\n' "$path" >&2
             return 1
@@ -470,6 +471,7 @@ validate_judge_consistency() {
 probes=()
 if [ -n "$PROBE_MANIFEST" ]; then
     while IFS= read -r probe_path; do
+        probe_path=${probe_path%$'\r'}
         probe_path=$(normalize_manifest_path "$probe_path") || {
             printf 'error: could not normalize held-out probe path: %s\n' "$probe_path" >&2
             exit 1

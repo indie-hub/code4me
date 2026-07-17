@@ -2,7 +2,7 @@
 
 **A multi-agent SDLC orchestrator for Claude Code and Codex.** Turn a one-line user request into a structured workflow: a lead architect designs, a challenger architect critiques, a spec-to-test engineer authors the test gate, a developer implements, and a quality-gate loop (verification + code review + QA) attests the work — all dispatched as agent roles, with optional cross-vendor pairing through OpenAI's Codex CLI or DeepSeek's Reasonix CLI for dialectic.
 
-**Status:** `0.14.1-dev` — adaptive model/effort routing and supervised improve mode are in development.
+**Status:** `0.14.2-dev` — adaptive model/effort routing and supervised improve mode are in development.
 
 ## What it does, concretely
 
