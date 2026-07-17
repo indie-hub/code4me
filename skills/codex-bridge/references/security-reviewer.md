@@ -96,11 +96,12 @@ Same template structure as `diff-focused`. Differences: INPUTS carries surface (
 ## Invocation
 
 ```
-timeout 300 codex exec --model {resolved_model} --prompt-file /tmp/codex-sec-{task_id}.txt \
+codex exec --model {resolved_model} -c 'model_reasoning_effort="{resolved_effort}"' - \
+  < /tmp/codex-sec-{task_id}.txt \
   > /tmp/codex-sec-{task_id}.out 2> /tmp/codex-sec-{task_id}.err
 ```
 
-300s for `diff-focused`. For `comprehensive`, use `timeout {timebox_minutes * 60 + 60}` capped at 1800. Exit codes: standard mapping.
+Use a 300s host tool/process timeout for `diff-focused`; for `comprehensive`, use `{timebox_minutes * 60 + 60}` capped at 1800. Do not depend on GNU `timeout`.
 
 ## Validation
 

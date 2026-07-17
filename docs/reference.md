@@ -86,23 +86,24 @@ Codex shims (opt-in; see `docs/howto-enable-codex.md`):
 - `/code4me-status [milestone_id]` — read-only snapshot of `.code4me/`
 - `/code4me-init` — scaffold a new project; never overwrites
 - `/code4me-probe-run [subdir|path]` — programmatic probe runner with LLM-as-judge + regression-budget
+- `/code4me-improve --held-out-manifest PATH [probe scope]` — supervised baseline/candidate experiment with external hash-verified held-out probes, explicit approval, and keep/revert
 - `/code4me-audit [path]` — wraps the dispatch-log audit tool
 - `/code4me-promote-or-revert <task_id>` — closes the Conversation Mode loop
 - `/code4me-preflight [--critical] [--quiet]` (v0.9+) — sanity-check the dispatch environment
 - `/code4me-trello-init` — one-time Trello board scaffold for the trello-sync skill
 - `/code4me-housekeeping` (v0.12+) — session-boundary checkpoint; writes a handoff manifest
 
-(The `/audit4me-config` and `/audit4me-status` commands belong to the audit4me surface — see `skills/audit4me/SKILL.md`.)
+(The `/audit4me-config`, `/audit4me-run`, and `/audit4me-status` commands belong to the audit4me surface — see `skills/audit4me/SKILL.md`.)
 
-## Vendor-aware model tiers (v0.7+)
+## Vendor-aware models and independent effort (v0.14+)
 
-| Tier | Use | Claude | Codex (OpenAI) |
+| Profile | Claude | Codex (OpenAI) | DeepSeek |
 |---|---|---|---|
-| `low` | mechanical work, fast iteration, parallel ops | Haiku 4.5 | GPT-5.4-mini |
-| `mid` | default reasoning, most workflows | Sonnet 4.6 | GPT-5.4 |
-| `high` | architecture, Critical Mode, deep reasoning | Opus 4.6/4.7 | GPT-5.5 (or `gpt-5.3-codex` for code-heavy work) |
+| `low` | `claude-haiku-4-5` | `gpt-5.6-luna` | `deepseek-v4-flash` |
+| `mid` | `claude-sonnet-5` | `gpt-5.6-terra` | `deepseek-v4-pro` |
+| `high` | `claude-opus-4-8` | `gpt-5.6-sol` | `deepseek-v4-pro` |
 
-Per-(subagent, weight) tier defaults live in `skills/code4me/references/model-selection.yaml`. Vendor → tier → concrete model resolution lives in `skills/code4me/references/vendor-models.yaml`. Update concrete models in those files when vendors ship new versions; no agent file or orchestrator logic needs to change.
+Anthropic `frontier: claude-fable-5` is explicit-only. Effort is resolved separately as `low`, `medium`, or `high`; `xhigh` and `max` require an explicit deviation and backend support. Legacy entries without effort use `low -> low`, `mid -> medium`, `high -> high` with `effort_source: legacy_tier_fallback`.
 
 Hard floors:
 
@@ -163,9 +164,13 @@ One line per Task-tool dispatch in `.code4me/dispatch-log.jsonl`:
 {
   "ts": "<ISO8601>",
   "milestone": "<id>", "task": "<id>", "weight": "<weight>",
-  "subagent": "<name>", "vendor": "anthropic|openai",
+  "subagent": "<name>", "vendor": "anthropic|openai|deepseek",
   "model_tier": "low|mid|high", "default_tier": "<tier>",
   "tier_deviated_from_default": <bool>, "model": "<concrete id>",
+  "effort": "low|medium|high|xhigh|max", "default_effort": "<effort>",
+  "effort_deviated_from_default": <bool>,
+  "effort_source": "default|explicit_deviation|legacy_tier_fallback",
+  "effort_applied": <bool>,
   "mode": "<mode or null>", "outcome": "<outcome>",
   "escalation_trigger": "<symptom class or null>",
   "vendor_pairing": {"policy": "...", "pair_role": "...", "alternates_with": "...", "degraded": "..."},
@@ -182,6 +187,7 @@ Field provenance:
 - v0.9: `spec_kit_interop`
 - v0.10.4: `trivial_justification` (Trivial entries only; `subagent: "orchestrator-inline (trivial)"`)
 - v0.13: `execution_mode` (`"solo"` on all entries of a solo task), `solo_requested_via`, `solo_justification` (solo implementation entries only; `subagent: "orchestrator-inline (solo)"`)
+- v0.14: `effort`, `default_effort`, `effort_deviated_from_default`, `effort_source`, `effort_applied`
 
 The log is append-only, local to the project, not part of the plugin distribution. The audit tool reads it; you may parse it yourself with `jq` for ad-hoc queries.
 

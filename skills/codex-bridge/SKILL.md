@@ -45,14 +45,16 @@ For each role × mode dispatch, the orchestrator:
 
 2. **Assembles the Codex prompt.** Each reference contains a mode-specific prompt template addressed to Codex in second person ("ROLE: You are the Challenger Architect...", "INPUTS:", "PROCEDURE:", "RETURN SCHEMA:"). The orchestrator substitutes `{placeholder}` fields with the actual values from the Context Pack, then writes the literal string to `/tmp/codex-{slug}-{task_id}.txt` via the Write tool. The slug per role is: `arch`, `dev`, `cr`, `s2t`, `sec`, `ver`, `la`.
 
-3. **Invokes Codex via Bash.** The command shape is:
+3. **Invokes Codex via Bash.** Send the prompt on stdin; current Codex does not support the previously documented `--prompt-file` flag:
 
    ```
-   timeout {N} codex exec --model {resolved_model} --prompt-file /tmp/codex-{slug}-{task_id}.txt \
+   codex exec --model {resolved_model} \
+     -c 'model_reasoning_effort="{resolved_effort}"' - \
+     < /tmp/codex-{slug}-{task_id}.txt \
      > /tmp/codex-{slug}-{task_id}.out 2> /tmp/codex-{slug}-{task_id}.err
    ```
 
-   The timeout `{N}` varies by role (see each role reference's "Invocation" section — typically 300s for architect-class, 600s for developer-class, 360s for verification's suite-run). The model `{resolved_model}` comes from the tier resolution (see below).
+   Apply the role time limit through the Bash/tool process timeout, not GNU `timeout` (which stock macOS does not ship). `{resolved_effort}` is resolved independently from the model. The bridge validates the value for the installed Codex backend and records `effort_applied: true` only when it was passed.
 
 4. **Parses and validates the response.** Read the `.out` file. `JSON.parse` it. Validate against the mode-specific schema in the role reference. Failure to parse → `BLOCKED` with `blocker_type: codex_response_invalid`. Schema validation failure → `BLOCKED` with the role+mode-specific typed blocker (e.g., `mandatory_critique_violation`, `out_of_scope_target`, `severity_outcome_mismatch`).
 
@@ -91,6 +93,10 @@ For each role × mode dispatch, the orchestrator:
      "subagent": "codex-{role} (skill-bridge)",
      "vendor": "openai", "model_tier": "<tier>", "default_tier": "<tier>",
      "tier_deviated_from_default": <bool>, "model": "<resolved id>",
+     "effort": "<level>", "default_effort": "<level>",
+     "effort_deviated_from_default": <bool>,
+     "effort_source": "<default|explicit_deviation|legacy_tier_fallback>",
+     "effort_applied": true,
      "mode": "<mode>", "outcome": "<outcome>",
      "escalation_trigger": "<symptom or null>",
      "vendor_pairing": {...},
@@ -119,7 +125,8 @@ The Codex model used per invocation is resolved by the standard rules:
    - `lead-architect` → `lead-architect`
 2. Look up `(mapped_role, weight)` in `skills/code4me/references/model-selection.yaml` → tier (`low` / `mid` / `high`).
 3. Resolve `(vendor=openai, tier)` in `skills/code4me/references/vendor-models.yaml` → concrete model identifier.
-4. Pass `--model {id}` to `codex exec`.
+4. Resolve effort independently from `effort_defaults`; if absent, use the legacy tier fallback.
+5. Pass `--model {id}` and `-c 'model_reasoning_effort="{effort}"'` to `codex exec`, with the prompt on stdin.
 
 Hard floors apply (architect ≥ `mid`; Critical ≥ `mid`; cross-vendor doesn't relax tier). Deviation rules apply the same as for Claude-side dispatches.
 
@@ -128,7 +135,7 @@ Hard floors apply (architect ≥ `mid`; Critical ≥ `mid`; cross-vendor doesn't
 The bridge **does not retry on failure**. It records a typed `blocker_type` and the orchestrator's circuit breakers handle the rest. Common blocker_types across all roles:
 
 - `codex_cli_not_installed` — pre-flight `command -v codex` failed
-- `codex_timeout` — `codex exec` exit code 124
+- `codex_timeout` — the host tool/process time limit expired
 - `codex_error` — `codex exec` non-zero exit (other), with stderr tail in `blocker_detail`
 - `codex_response_invalid` — JSON parse failure or schema violation
 

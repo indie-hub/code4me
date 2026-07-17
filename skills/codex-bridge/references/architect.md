@@ -133,11 +133,12 @@ RETURN SCHEMA:
 ## Invocation
 
 ```
-timeout 300 codex exec --model {resolved_model} --prompt-file /tmp/codex-arch-{task_id}.txt \
+codex exec --model {resolved_model} -c 'model_reasoning_effort="{resolved_effort}"' - \
+  < /tmp/codex-arch-{task_id}.txt \
   > /tmp/codex-arch-{task_id}.out 2> /tmp/codex-arch-{task_id}.err
 ```
 
-Exit codes:
+Apply the 300s limit through the host tool/process timeout, not GNU `timeout`. Exit codes:
 - 0 → parse
 - 124 → `BLOCKED` with `blocker_type: codex_timeout`
 - 127 → `BLOCKED` with `blocker_type: codex_cli_not_installed`

@@ -4,7 +4,21 @@ All notable changes to this plugin will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.13.4-dev] — in progress
+## [0.14.0-dev] — in progress
+
+### Added
+
+- `/code4me-improve`: supervised baseline-first improvement experiments in a clean temporary worktree, with frozen probe manifests, one approved candidate change, held-out isolation, and explicit keep/revert.
+- Independent dispatch effort defaults and logging (`effort`, `default_effort`, deviation/source/application fields), including backward-compatible legacy tier fallback.
+- Focused model-routing, improve-supervision, mapping, wrapper, audit, and probe-structure tests.
+
+### Changed
+
+- Current vendor mappings: Anthropic Haiku 4.5 / Sonnet 5 / Opus 4.8 (Fable 5 explicit-only), OpenAI GPT-5.6 Luna / Terra / Sol, DeepSeek V4 Flash / V4 Pro.
+- Codex bridge now documents stdin prompts and `model_reasoning_effort`; Reasonix uses project-overrideable, doctor-verified provider aliases and honestly records unsupported effort as not applied. Former invalid `deepseek-v4-pro[1m]` overrides must migrate to `deepseek-v4-pro` or an exact custom model plus `reasonix_aliases` entry.
+- Claude wrapper helper validates and forwards `--effort`.
+
+## [0.13.4-dev]
 
 ### Added
 

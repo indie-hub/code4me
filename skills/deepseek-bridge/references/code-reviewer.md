@@ -135,16 +135,13 @@ RETURN SCHEMA:
 ## Invocation
 
 ```
-timeout 300 reasonix run \
-  --model {resolved_model} \
-  --effort {resolved_effort} \
-  --transcript /tmp/deepseek-cr-{task_id}.transcript.jsonl \
+reasonix run --model {reasonix_provider_alias} \
   "$(cat /tmp/deepseek-cr-{task_id}.txt)" \
   > /tmp/deepseek-cr-{task_id}.out \
   2> /tmp/deepseek-cr-{task_id}.err
 ```
 
-240s timeout — review work is faster than implementation. Exit codes: 0 → parse; 124 → `deepseek_timeout`; 127 → `reasonix_cli_not_installed`; other → `deepseek_subprocess_error`.
+Use a 240s host tool/process timeout. Exit codes: 0 → parse; host timeout → `deepseek_timeout`; 127 → `reasonix_cli_not_installed`; other → `deepseek_subprocess_error`.
 
 ## Validation
 

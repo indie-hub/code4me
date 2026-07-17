@@ -4,10 +4,10 @@ The canonical state-of-play table for this milestone. The orchestrator updates i
 
 ## Tasks
 
-| task_id | subagent | vendor:model | status | started | completed | notes |
-|---|---|---|---|---|---|---|
-| {milestone_id}-T01-DEV | developer | anthropic:sonnet | COMPLETE | 2026-05-15T09:12Z | 2026-05-15T09:47Z | smoke test green; touched `src/ui/Welcome.cs` |
-| {milestone_id}-T02-DEV | codex-developer | openai:gpt-5-codex | DISPATCHED | 2026-05-15T10:02Z |  | cross-vendor implementation; protected-tests list forwarded |
+| task_id | subagent | vendor:model | effort | status | started | completed | notes |
+|---|---|---|---|---|---|---|---|
+| {milestone_id}-T01-DEV | developer | anthropic:claude-sonnet-5 | medium | COMPLETE | 2026-05-15T09:12Z | 2026-05-15T09:47Z | smoke test green; touched `src/ui/Welcome.cs` |
+| {milestone_id}-T02-DEV | codex-developer | openai:gpt-5.6-terra | high | DISPATCHED | 2026-05-15T10:02Z |  | cross-vendor implementation; protected-tests list forwarded |
 
 Valid `status` values: `PENDING`, `DISPATCHED`, `COMPLETE`, `BLOCKED`, `REWORK`, `ESCALATED`.
 
@@ -19,5 +19,5 @@ Valid `status` values: `PENDING`, `DISPATCHED`, `COMPLETE`, `BLOCKED`, `REWORK`,
 ## Notes
 
 - Update on every state change. Persist artifacts before declaring a task complete.
-- `vendor:model` column uses the notation defined in `references/model-selection.md` (`anthropic:<tier>` for Claude-side dispatch, `openai:<codex_model>` for Codex-shim dispatch).
+- Record the concrete `vendor:model` and requested effort independently. Put unsupported backend application details in notes and dispatch JSONL (`effort_applied`).
 - When auto-escalation fires, record the trigger in the auto-escalation log per `references/auto-escalation.md`.

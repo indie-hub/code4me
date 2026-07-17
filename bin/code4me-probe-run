@@ -21,10 +21,13 @@
 # Flags:
 #   --max-flips=N           Override budget.toml's max_flips for this run.
 #   --baseline=PATH         Compare against PATH instead of the budget default.
+#   --output PATH           Write results directly to PATH. The parent must exist.
+#   --manifest PATH         Run the hash-verified external held-out manifest.
+#                           Requires --output outside this worktree.
 #   --update-baseline       After running, promote current results to baseline.
 #                           Skipped if any probe errored.
 #   --no-budget             Skip the flip check entirely.
-#   --judge-model=MODEL     LLM-as-judge model (default: claude-sonnet-4-6).
+#   --judge-model=MODEL     LLM-as-judge model (default: claude-sonnet-5).
 #
 # Required:
 #   - ANTHROPIC_API_KEY  (for the LLM-as-judge call)
@@ -89,16 +92,20 @@ case "$BUDGET_BASELINE" in
     *) BUDGET_BASELINE="${PLUGIN_ROOT}/${BUDGET_BASELINE}" ;;
 esac
 
-JUDGE_MODEL="${CODE4ME_JUDGE_MODEL:-claude-sonnet-4-6}"
+JUDGE_MODEL="${CODE4ME_JUDGE_MODEL:-claude-sonnet-5}"
 DO_BUDGET=1
 DO_UPDATE_BASELINE=0
 MAX_FLIPS="$BUDGET_MAX_FLIPS"
 BASELINE_PATH="$BUDGET_BASELINE"
+OUTPUT_PATH=""
+PROBE_MANIFEST=""
 
 # ---- CLI flag parsing ----
 
 probe_args=()
-for arg in "$@"; do
+while [ "$#" -gt 0 ]; do
+    arg="$1"
+    shift
     case "$arg" in
         --max-flips=*)
             MAX_FLIPS="${arg#--max-flips=}" ;;
@@ -108,6 +115,24 @@ for arg in "$@"; do
                 /*) ;;
                 *) BASELINE_PATH="${PLUGIN_ROOT}/${BASELINE_PATH}" ;;
             esac ;;
+        --output)
+            if [ "$#" -eq 0 ]; then
+                printf 'error: --output requires a path\n' >&2
+                exit 1
+            fi
+            OUTPUT_PATH="$1"
+            shift ;;
+        --output=*)
+            OUTPUT_PATH="${arg#--output=}" ;;
+        --manifest)
+            if [ "$#" -eq 0 ]; then
+                printf 'error: --manifest requires a path\n' >&2
+                exit 1
+            fi
+            PROBE_MANIFEST="$1"
+            shift ;;
+        --manifest=*)
+            PROBE_MANIFEST="${arg#--manifest=}" ;;
         --update-baseline)
             DO_UPDATE_BASELINE=1 ;;
         --no-budget)
@@ -121,6 +146,151 @@ for arg in "$@"; do
             probe_args+=("$arg") ;;
     esac
 done
+
+is_absolute_path() {
+    case "$1" in
+        /*|[A-Za-z]:/*|[A-Za-z]:\\*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+canonical_path() {
+    local path="$1" parent name
+    parent=$(dirname "$path")
+    name=$(basename "$path")
+    (cd "$parent" 2>/dev/null && printf '%s/%s\n' "$(pwd -P)" "$name")
+}
+
+sha256_file() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | awk '{print $1}'
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$1" | awk '{print $1}'
+    else
+        printf 'error: sha256sum or shasum is required for --manifest\n' >&2
+        return 1
+    fi
+}
+
+validate_output_path() {
+    local path="$1" parent parent_real name final_path
+    if [ -z "$path" ]; then
+        printf 'error: --output requires a non-empty path\n' >&2
+        return 1
+    fi
+    parent=$(dirname "$path")
+    if [ ! -d "$parent" ] || [ ! -w "$parent" ]; then
+        printf 'error: output parent must be an existing writable directory: %s\n' "$parent" >&2
+        return 1
+    fi
+    parent_real=$(cd "$parent" 2>/dev/null && pwd -P) || {
+        printf 'error: could not resolve physical output parent: %s\n' "$parent" >&2
+        return 1
+    }
+    name=$(basename "$path")
+    final_path="${parent_real}/${name}"
+    if [ -e "$final_path" ] || [ -L "$final_path" ]; then
+        printf 'error: output path already exists or is a symbolic link: %s\n' "$final_path" >&2
+        return 1
+    fi
+    printf '%s\n' "$final_path"
+}
+
+create_results_file() {
+    local path="$1"
+    (set -C; : > "$path") 2>/dev/null
+}
+
+validate_manifest() {
+    local manifest="$1" path expected actual probe_real
+    if ! is_absolute_path "$manifest"; then
+        printf 'error: --manifest must be an absolute path\n' >&2
+        return 1
+    fi
+    if [ -L "$manifest" ]; then
+        printf 'error: held-out manifest must not be a symbolic link\n' >&2
+        return 1
+    fi
+    if [ ! -r "$manifest" ]; then
+        printf 'error: held-out manifest is not readable: %s\n' "$manifest" >&2
+        return 1
+    fi
+    if ! jq -e '
+        type == "object" and
+        .schema_version == 1 and
+        (.probes | type == "array" and length > 0) and
+        all(.probes[];
+            type == "object" and
+            ((keys | sort) == ["path", "sha256"]) and
+            (.path | type == "string" and length > 0) and
+            (.sha256 | type == "string" and test("^[0-9a-f]{64}$"))) and
+        ((keys | sort) == ["probes", "schema_version"])
+    ' "$manifest" >/dev/null 2>&1; then
+        printf 'error: held-out manifest does not match schema version 1\n' >&2
+        return 1
+    fi
+    while IFS=$'\t' read -r path expected; do
+        if ! is_absolute_path "$path"; then
+            printf 'error: held-out probe path must be absolute: %s\n' "$path" >&2
+            return 1
+        fi
+        if [ ! -r "$path" ] || [ ! -f "$path" ]; then
+            printf 'error: held-out probe is not a readable file: %s\n' "$path" >&2
+            return 1
+        fi
+        if [ -L "$path" ]; then
+            printf 'error: held-out probe must not be a symbolic link: %s\n' "$path" >&2
+            return 1
+        fi
+        probe_real=$(canonical_path "$path") || return 1
+        case "$probe_real" in
+            "$plugin_root_real"|"$plugin_root_real"/*)
+                printf 'error: held-out probe must live outside the candidate worktree: %s\n' "$path" >&2
+                return 1 ;;
+        esac
+        actual=$(sha256_file "$path") || return 1
+        if [ "$actual" != "$expected" ]; then
+            printf 'error: held-out probe hash mismatch: %s\n' "$path" >&2
+            return 1
+        fi
+    done < <(jq -r '.probes[] | [.path, .sha256] | @tsv' "$manifest")
+}
+
+plugin_root_real=$(cd "$PLUGIN_ROOT" && pwd -P)
+
+if [ -n "$OUTPUT_PATH" ]; then
+    OUTPUT_PATH=$(validate_output_path "$OUTPUT_PATH") || exit 1
+fi
+
+if [ -n "$PROBE_MANIFEST" ]; then
+    if [ "${#probe_args[@]}" -ne 0 ]; then
+        printf 'error: --manifest cannot be combined with positional probe paths\n' >&2
+        exit 1
+    fi
+    if [ -z "$OUTPUT_PATH" ]; then
+        printf 'error: --manifest requires --output outside the candidate worktree\n' >&2
+        exit 1
+    fi
+    if [ -L "$PROBE_MANIFEST" ]; then
+        printf 'error: held-out manifest must not be a symbolic link\n' >&2
+        exit 1
+    fi
+    PROBE_MANIFEST=$(canonical_path "$PROBE_MANIFEST") || {
+        printf 'error: held-out manifest parent does not exist\n' >&2
+        exit 1
+    }
+    case "$PROBE_MANIFEST" in
+        "$plugin_root_real"|"$plugin_root_real"/*)
+            printf 'error: held-out manifest must live outside the candidate worktree\n' >&2
+            exit 1 ;;
+    esac
+    case "$OUTPUT_PATH" in
+        "$plugin_root_real"|"$plugin_root_real"/*)
+            printf 'error: held-out output must live outside the candidate worktree\n' >&2
+            exit 1 ;;
+    esac
+    validate_manifest "$PROBE_MANIFEST" || exit 1
+fi
 
 # ---- probe discovery ----
 
@@ -168,9 +338,9 @@ extract_section() {
 # ---- LLM-as-judge ----
 
 build_judge_prompt() {
-    local probe_path="$1" input="$2" expected="$3" response="$4"
+    local probe_path="$1" input="$2" expected="$3" pass_criterion="$4" response="$5"
     cat <<EOF
-You are evaluating whether a multi-agent orchestrator's response to a code4me probe matches the probe's documented expectation. You are NOT evaluating whether the response is "good" — only whether it matches the specific Expected block on the probe's three axes: kind, weight, and team composition.
+You are evaluating whether a multi-agent orchestrator's response to a code4me probe satisfies the probe's documented contract. Evaluate every requirement in both the Expected and Pass criterion sections. Do not substitute general response quality for those explicit requirements.
 
 PROBE FILE: ${probe_path}
 
@@ -184,29 +354,34 @@ EXPECTED (from the probe file):
 ${expected}
 ---
 
+PASS CRITERION (from the probe file):
+---
+${pass_criterion}
+---
+
 ORCHESTRATOR RESPONSE (captured from a fresh session):
 ---
 ${response}
 ---
 
-Score the match on three axes. Each axis: "match" or "mismatch", with a one-line reason. The axes:
+Break the contract into concrete criteria and score each criterion as "match" or "mismatch" with a one-line reason grounded in the response. Include at least one criterion sourced from Expected and at least one sourced from Pass criterion. Set both coverage fields to "complete" only after evaluating every requirement in that section. Classification probes remain backward compatible: when kind, weight, or team are specified, also populate those named fields. Otherwise set each classification field to "not_applicable".
 
-1. **kind**: does the orchestrator's announced kind match the probe's expected kind?
-2. **weight**: does the orchestrator's announced weight (including auto-escalation if any) match the probe's expected weight?
-3. **team**: does the orchestrator's announced team match the expected team — names, vendor tags, mode tags where applicable? Order is informational; required additions/skips are required.
-
-The overall outcome:
-- **pass**: all three axes match.
-- **partial**: one axis mismatches but the others match.
-- **fail**: two or more axes mismatch.
+Overall outcome:
+- **pass** if and only if every criterion matches.
+- **partial** if and only if at least one criterion matches and at least one mismatches.
+- **fail** requires at least one mismatch. It may also contain matches when a central required behavior fails.
 
 Return a single JSON object, no prose around it, no markdown code fences:
 
 {
   "outcome": "pass" | "partial" | "fail",
-  "kind": {"result": "match" | "mismatch", "reason": "<one-line>"},
-  "weight": {"result": "match" | "mismatch", "reason": "<one-line>"},
-  "team": {"result": "match" | "mismatch", "reason": "<one-line>"},
+  "coverage": {"expected": "complete", "pass_criterion": "complete"},
+  "criteria": [
+    {"source": "expected" | "pass_criterion", "criterion": "<one requirement>", "result": "match" | "mismatch", "reason": "<one-line>"}
+  ],
+  "kind": {"result": "match" | "mismatch" | "not_applicable", "reason": "<one-line>"},
+  "weight": {"result": "match" | "mismatch" | "not_applicable", "reason": "<one-line>"},
+  "team": {"result": "match" | "mismatch" | "not_applicable", "reason": "<one-line>"},
   "summary": "<one-line summary of the comparison>"
 }
 EOF
@@ -220,7 +395,7 @@ call_judge() {
         --rawfile prompt "$prompt_file" \
         '{
             model: $model,
-            max_tokens: 1024,
+            max_tokens: 2048,
             messages: [{role: "user", content: $prompt}]
         }')
     curl -sS https://api.anthropic.com/v1/messages \
@@ -230,9 +405,62 @@ call_judge() {
         -d "$body"
 }
 
+validate_judge_verdict() {
+    jq -e '
+        type == "object" and
+        (.outcome == "pass" or .outcome == "partial" or .outcome == "fail") and
+        (.coverage | type == "object") and
+        (.coverage.expected == "complete") and
+        (.coverage.pass_criterion == "complete") and
+        (.criteria | type == "array" and length > 0) and
+        all(.criteria[];
+            type == "object" and
+            (.source == "expected" or .source == "pass_criterion") and
+            (.criterion | type == "string" and length > 0) and
+            (.result == "match" or .result == "mismatch" or
+             .result == "satisfied" or .result == "unsatisfied") and
+            (.reason | type == "string" and length > 0)) and
+        any(.criteria[]; .source == "expected") and
+        any(.criteria[]; .source == "pass_criterion") and
+        all([.kind, .weight, .team][];
+            type == "object" and
+            (.result == "match" or .result == "mismatch" or
+             .result == "not_applicable") and
+            (.reason | type == "string" and length > 0)) and
+        (.summary | type == "string" and length > 0)
+    ' >/dev/null 2>&1
+}
+
+validate_judge_consistency() {
+    jq -e '
+        def matched: . == "match" or . == "satisfied";
+        def mismatched: . == "mismatch" or . == "unsatisfied";
+        ([.criteria[].result] | map(select(matched)) | length) as $matches |
+        ([.criteria[].result] | map(select(mismatched)) | length) as $mismatches |
+        if .outcome == "pass" then
+            $matches == (.criteria | length) and $mismatches == 0
+        elif .outcome == "partial" then
+            $matches > 0 and $mismatches > 0
+        elif .outcome == "fail" then
+            $mismatches > 0
+        else
+            false
+        end
+    ' >/dev/null 2>&1
+}
+
 # ---- main loop ----
 
-probes=( $(discover_probes "${probe_args[@]}") )
+probes=()
+if [ -n "$PROBE_MANIFEST" ]; then
+    while IFS= read -r probe_path; do
+        probes+=("$probe_path")
+    done < <(jq -r '.probes[].path' "$PROBE_MANIFEST")
+else
+    while IFS= read -r probe_path; do
+        probes+=("$probe_path")
+    done < <(discover_probes "${probe_args[@]}")
+fi
 
 if [ "${#probes[@]}" -eq 0 ]; then
     printf 'No probes matched.\n' >&2
@@ -240,8 +468,25 @@ if [ "${#probes[@]}" -eq 0 ]; then
 fi
 
 stamp=$(date -u +%Y-%m-%dT%H%M%S)
-results_file="${PROBES_DIR}/results-${stamp}.jsonl"
-: > "$results_file"
+if [ -n "$OUTPUT_PATH" ]; then
+    results_file="$OUTPUT_PATH"
+    if ! create_results_file "$results_file"; then
+        printf 'error: output path was created before exclusive open: %s\n' "$results_file" >&2
+        exit 1
+    fi
+else
+    results_base="${PROBES_DIR}/results-${stamp}"
+    results_file="${results_base}.jsonl"
+    suffix=0
+    while ! create_results_file "$results_file"; do
+        suffix=$((suffix+1))
+        if [ "$suffix" -gt 999 ]; then
+            printf 'error: could not allocate a unique default results path\n' >&2
+            exit 1
+        fi
+        results_file="${results_base}-${suffix}.jsonl"
+    done
+fi
 
 pass_count=0
 fail_count=0
@@ -266,10 +511,11 @@ for i in "${!probes[@]}"; do
 
     input=$(extract_section "$probe" "Input prompt")
     expected=$(extract_section "$probe" "Expected")
+    pass_criterion=$(extract_section "$probe" "Pass criterion")
 
-    if [ -z "$input" ] || [ -z "$expected" ]; then
-        printf 'SKIP: probe missing Input prompt or Expected section\n' >&2
-        printf '{"probe":"%s","outcome":"skip","reason":"missing input or expected"}\n' "$rel" >> "$results_file"
+    if [ -z "$input" ] || [ -z "$expected" ] || [ -z "$pass_criterion" ]; then
+        printf 'SKIP: probe missing Input prompt, Expected, or Pass criterion section\n' >&2
+        printf '{"probe":"%s","outcome":"skip","reason":"missing input, expected, or pass criterion"}\n' "$rel" >> "$results_file"
         error_count=$((error_count+1))
         continue
     fi
@@ -297,7 +543,7 @@ for i in "${!probes[@]}"; do
     fi
 
     tmp_prompt=$(mktemp)
-    build_judge_prompt "$rel" "$input" "$expected" "$response" > "$tmp_prompt"
+    build_judge_prompt "$rel" "$input" "$expected" "$pass_criterion" "$response" > "$tmp_prompt"
 
     raw=$(call_judge "$tmp_prompt")
     rm -f "$tmp_prompt"
@@ -322,8 +568,24 @@ for i in "${!probes[@]}"; do
         continue
     fi
 
+    if ! printf '%s' "$verdict" | validate_judge_verdict; then
+        printf 'ERROR: judge response did not match the verdict schema\n' >&2
+        printf '{"probe":"%s","outcome":"error","reason":"judge response schema invalid","raw":%s}\n' \
+            "$rel" "$verdict" >> "$results_file"
+        error_count=$((error_count+1))
+        continue
+    fi
+
     outcome=$(printf '%s' "$verdict" | jq -r '.outcome // "error"')
     summary=$(printf '%s' "$verdict" | jq -r '.summary // "no summary"')
+
+    if ! printf '%s' "$verdict" | validate_judge_consistency; then
+        printf 'ERROR: judge outcome contradicts its criteria\n' >&2
+        printf '{"probe":"%s","outcome":"error","reason":"judge outcome inconsistent with criteria","raw":%s}\n' \
+            "$rel" "$verdict" >> "$results_file"
+        error_count=$((error_count+1))
+        continue
+    fi
 
     case "$outcome" in
         pass) pass_count=$((pass_count+1)) ;;

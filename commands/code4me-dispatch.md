@@ -17,8 +17,8 @@ Procedure:
 5. Treat the remaining text as the task description. Consult Basic Memory if its MCP tools are configured.
 6. Run classification on **kind only** (Bug Fix / Tech Debt / Spike / Incident / Scope Change / product). The weight is already declared.
 7. Apply auto-escalation override per `references/auto-escalation.md` — if a symptom class fires and the declared weight is below the floor, raise to the floor and announce the escalation. Do NOT ask the user; the override is non-negotiable.
-8. Decide the team per `references/team-templates.md` + hard floors. In solo mode the "team" is the orchestrator inline plus the retained gate (combined-reviewer for Conversation/Light, verification for Standard) plus any escalation-mandated subagents. Resolve vendor (cross-vendor policy if enabled) and tier (per `references/model-selection.yaml`).
-9. Emit the Team Transparency announcement with `(vendor:tier)` annotations. For solo, use the solo announcement format from `references/solo-mode.md` — including the mandatory `Solo requested via: --solo flag` clause.
+8. Decide the team per `references/team-templates.md` + hard floors. In solo mode the "team" is the orchestrator inline plus the retained gate (combined-reviewer for Conversation/Light, verification for Standard) plus any escalation-mandated subagents. Resolve vendor, model profile, and effort independently.
+9. Emit the Team Transparency announcement with backward-compatible `(vendor:tier)` annotations plus an explicit effort summary. For solo, use the solo announcement format from `references/solo-mode.md` — including the mandatory `Solo requested via: --solo flag` clause.
 10. **Proceed with dispatch** through the canonical operating loop in `SKILL.md` (or the solo per-weight procedure in `references/solo-mode.md`) — persist `.code4me/` state, dispatch/implement, route returns, escalate per circuit breakers, present outcome.
 
 Arguments:

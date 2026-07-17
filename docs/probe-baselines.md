@@ -6,6 +6,11 @@ The v0.8 regression budget (`probes/budget.toml`) compares each probe run's outc
 
 A baseline is a `results-*.jsonl` file (one line per probe with the probe path + outcome) that the runner uses as the comparison point for subsequent runs. By default, `bin/code4me-probe-run` writes results to `probes/results-{stamp}.jsonl` and compares against `probes/baseline.jsonl` (configurable in `probes/budget.toml`).
 
+Use `--output PATH` to write directly to an existing external evidence
+directory. Supervised improve mode also uses `--manifest PATH` for its required,
+hash-verified held-out probe set; manifest runs require external `--output` and
+do not write evidence into the candidate worktree.
+
 Baselines are personal artifacts of a verification run — they reflect the orchestrator's behaviour at a specific commit, with a specific judge model, on a specific machine. They're **gitignored** (the plugin's `.gitignore` excludes `probes/results-*.jsonl` and `probes/baseline.jsonl`) so a downstream consumer of the plugin sees only the probes and their expectations, not a particular run's transcript.
 
 ## When to capture a new baseline
@@ -24,7 +29,7 @@ The runner promotes the current `results-{stamp}.jsonl` to `probes/baseline.json
 
 ### 2. After upgrading the judge model
 
-The LLM-as-judge call uses the model specified by `--judge-model=...` or `CODE4ME_JUDGE_MODEL` (default `claude-sonnet-4-6`). When you upgrade the judge — switching to a newer Sonnet, switching to Opus for higher fidelity — the judge's interpretation of "match" can shift even when nothing about the framework has changed.
+The LLM-as-judge call uses the model specified by `--judge-model=...` or `CODE4ME_JUDGE_MODEL` (default `claude-sonnet-5`). When you upgrade the judge — switching to a newer Sonnet, switching to Opus for higher fidelity — the judge's interpretation of "match" can shift even when nothing about the framework has changed.
 
 Re-baseline after the upgrade. Note in your run log that the baseline shift is judge-driven, not framework-driven.
 

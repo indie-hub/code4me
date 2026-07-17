@@ -83,13 +83,13 @@ The orchestrator has decomposition-violated if:
 
 Surface 1 and 2 as `BLOCKED` with `blocker_type: milestone_not_decomposed` and `blocker_type: acceptance_criteria_block_missing` respectively. 3 and 4 are softer drift signals — log to the dispatch log and surface in the next transparency announcement so the user notices.
 
-## Model selection deviation rules
+## Model and effort deviation rules
 
-Model resolution is now vendor-aware via the tier abstraction. Defaults live in `model-selection.yaml` (machine-readable) with prose in `model-selection.md`. Concrete model identifiers live in `vendor-models.yaml`.
+Model resolution is vendor-aware via the tier abstraction. Effort is an independent decision. Defaults live in `model-selection.yaml` (machine-readable) with prose in `model-selection.md`. Concrete model identifiers live in `vendor-models.yaml`.
 
 Defaults summarised:
 
-- **Conversation team** → `low` tier (Haiku / GPT-5.4-mini)
+- **Conversation team** → usually `low` model / `low` effort
 - **Light team** → mixed `low`/`mid` tier
 - **Standard team** → `mid` tier with `high` for architects
 - **Critical team** → `high` tier on load-bearing roles
@@ -99,7 +99,9 @@ Resolution: look up tier from `model-selection.yaml[role][weight]` → apply har
 Deviation rules (vendor-agnostic):
 
 - Deviate when complexity surprises you, when stakes change mid-flight, or when a previous dispatch at the default failed.
-- Record deviations as `tier_deviated_from_default: true` with `default_tier` and `actual_tier` in the dispatch log entry — patterns of deviation are signal that the defaults table needs tuning.
+- Record model deviations as `tier_deviated_from_default: true`; record effort deviations independently with `default_effort`, `effort_deviated_from_default`, `effort_source`, and `effort_applied`.
+- A failed attempt normally raises effort first. Change model only when capability is the problem.
+- `xhigh` and `max` require explicit deviation and backend support. Unsupported backends keep the requested value as metadata and record `effort_applied: false`.
 - **Never downgrade** Architect roles below tier `mid` (regardless of vendor).
 - **Never downgrade** Critical work below tier `mid`.
 - **Never downgrade** auto-escalated work below the resolved tier.
@@ -127,17 +129,17 @@ Dispatch without asking when the request maps unambiguously to a workflow kind w
 
 At every dispatch, announce the team composition with reasoning **before** the first Task call. Format:
 
-> Team for `{task_id}` ({weight}{, cross-vendor enabled if applicable}): {subagent list with `(vendor:tier)` annotations}. {Pairing notes if cross-vendor.} {Reason for the composition.} {Hard floors that applied.} {Non-default ordering, if any.}
+> Team for `{task_id}` ({weight}{, cross-vendor enabled if applicable}): {subagent list with `(vendor:tier)` annotations}. Effort: {per-role effort, highlighting deviations or unsupported application}. {Pairing notes if cross-vendor.} {Reason for the composition.} {Hard floors that applied.} {Non-default ordering, if any.}
 
-`vendor` is `claude` or `codex` (short forms for the announcement; the dispatch log records `anthropic` / `openai` and the concrete model identifier). `tier` is `low` / `mid` / `high`. Concrete model IDs live in the dispatch log, not the announcement line — tier is the human-decision-relevant signal.
+`vendor` is `claude`, `codex`, or `deepseek`. `tier` is `low` / `mid` / `high`; effort is normally `low` / `medium` / `high` and is shown separately so existing `(vendor:tier)` consumers remain compatible. Concrete model IDs live in the dispatch log.
 
 Example (single-vendor):
 
-> Team for `M03-T07-DEV` (Standard): lead-architect (claude:high), challenger-architect (claude:high), spec-to-test (claude:mid), developer (claude:mid), verification (claude:mid), code-reviewer (claude:mid), qa (claude:mid). **Adding** researcher (domain question about Unity addressables). **Skipping** doc-writer (no user-visible behaviour change; you confirmed at intake on 2026-05-15). **Order**: verification and code-reviewer running in parallel after developer completion.
+> Team for `M03-T07-DEV` (Standard): lead-architect (claude:high), challenger-architect (claude:high), spec-to-test (claude:mid), developer (claude:mid), verification (claude:mid), code-reviewer (claude:mid), qa (claude:mid). **Effort**: architects=high; remaining roles=medium. **Adding** researcher (domain question about Unity addressables). **Skipping** doc-writer (no user-visible behaviour change; you confirmed at intake on 2026-05-15). **Order**: verification and code-reviewer running in parallel after developer completion.
 
 Example (cross-vendor enabled, Critical milestone — v0.10+ mechanism: Claude-side roles are Task subagents; codex-side roles are codex-bridge skill invocations):
 
-> Team for `M07-T03-DEV` (Critical, cross-vendor enabled): lead-architect (claude:high), codex-bridge[architect] (codex:high, mode=challenge), codex-bridge[spec-to-test] (codex:mid), developer (claude:mid), codex-bridge[verification] (codex:mid), codex-bridge[code-reviewer] (codex:mid), qa (claude:mid), codex-bridge[security-reviewer] (codex:high), doc-writer (claude:mid). **Pairing**: architect Co-Approval (Claude / Codex); test author (Codex) ≠ implementer (Claude); implementer (Claude) ≠ reviewer/verifier/security (Codex). QA and docs single-vendor.
+> Team for `M07-T03-DEV` (Critical, cross-vendor enabled): lead-architect (claude:high), codex-bridge[architect] (codex:high, mode=challenge), codex-bridge[spec-to-test] (codex:mid), developer (claude:mid), codex-bridge[verification] (codex:mid), codex-bridge[code-reviewer] (codex:mid), qa (claude:mid), codex-bridge[security-reviewer] (codex:high), doc-writer (claude:mid). **Effort**: architects/developer/reviewer/security=high; remaining roles=medium. **Pairing**: architect Co-Approval (Claude / Codex); test author (Codex) ≠ implementer (Claude); implementer (Claude) ≠ reviewer/verifier/security (Codex). QA and docs single-vendor.
 
 Example (Trivial classification — orchestrator-inline, v0.10.4+):
 

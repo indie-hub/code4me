@@ -16,7 +16,7 @@ Pre-flight `claude-p` with `command -v claude-p`. Missing wrapper means
 required Claude; in that case surface `BLOCKED` with
 `blocker_type: claude_wrapper_not_installed`.
 
-Rules for how the orchestrator picks which vendor runs which subagent when cross-vendor pairing is enabled for a milestone. Read alongside `model-selection.md` (per-(subagent, weight) tier defaults) and `model-selection.yaml` (machine-readable form). Together they answer the two dispatch questions: *which vendor?* (this file) and *which model on that vendor?* (the tier system).
+Rules for how the orchestrator picks which vendor runs which subagent when cross-vendor pairing is enabled for a milestone. Read alongside `model-selection.md` and `model-selection.yaml`. Together they answer three independent dispatch questions: *which vendor?*, *which model profile?*, and *which effort?*.
 
 ## When this applies
 
@@ -49,7 +49,7 @@ At team-composition time, the orchestrator:
 3. **For each pair the producer participates in,** set the verifier's vendor to the opposite of the anchor. Each agent's `cross_vendor_pair_with:` frontmatter declares which pairs it participates in.
 4. **Resolve transitive conflicts.** If the same role appears as verifier in pair A and producer in pair B with conflicting vendor assignments, prefer the pair closest to the artifact under review (e.g., `developer↔code-reviewer` wins over `spec-to-test↔developer` when both compete for the developer's vendor). Record the resolution choice in the announcement.
 5. **Check Codex bridge availability.** For every cross-vendor assignment that resolves to vendor=openai, confirm the `codex` CLI is on PATH (the orchestrator runs `command -v codex` once at team-composition time as part of the codex-bridge skill's pre-flight). If `codex` is missing, fall back to the anchor vendor for that role and record `pairing_degraded: codex_unavailable` in the dispatch log entry. Note: the bridge does NOT pre-check `OPENAI_API_KEY` — modern Codex CLI supports `codex login` (OAuth) OR the env var; auth failures (if any) surface when `codex exec` actually runs.
-6. **Resolve concrete models.** For each (role, vendor) pair, look up the tier from `model-selection.yaml` and the concrete model identifier from `vendor-models.yaml`. The Task dispatch for Claude-side roles carries the explicit `model` string; the codex-bridge invocation for Codex-side roles passes it via `--model` to `codex exec`.
+6. **Resolve concrete models and effort independently.** For each (role, vendor) pair, look up `model_tier` and `effort` separately in `model-selection.yaml`, then resolve the concrete model through `vendor-models.yaml`. Changing effort never enables a vendor or changes the model. Legacy callers without effort use the documented tier fallback.
 
 ## Recording
 
@@ -66,7 +66,12 @@ Every dispatch log entry carries the pairing decision and the tier resolution:
   "model_tier": "mid",
   "default_tier": "mid",
   "tier_deviated_from_default": false,
-  "model": "gpt-5.4",
+  "model": "gpt-5.6-terra",
+  "effort": "high",
+  "default_effort": "medium",
+  "effort_deviated_from_default": true,
+  "effort_source": "explicit_deviation",
+  "effort_applied": true,
   "mode": "review-diff",
   "outcome": "COMPLETE",
   "escalation_trigger": null,
@@ -79,7 +84,7 @@ Every dispatch log entry carries the pairing decision and the tier resolution:
 }
 ```
 
-The audit tool (`bin/code4me-audit-dispatch-log`) groups by `(vendor, tier)` and surfaces pairing-degraded entries as a separate section so cross-vendor cost rollups and Codex-availability problems both stay visible. Codex-bridge invocations appear in the log with `subagent: "codex-{role} (skill-bridge)"` to distinguish them from Claude-side Task dispatches.
+The audit tool (`bin/code4me-audit-dispatch-log`) groups by `(vendor, tier)` and reports effort distribution, deviation, and whether the backend applied it. Codex-bridge invocations appear in the log with `subagent: "codex-{role} (skill-bridge)"` to distinguish them from Claude-side Task dispatches.
 
 ## Failure modes and fallback
 
@@ -102,18 +107,18 @@ Restated from `model-selection.yaml` for completeness — the pairing layer does
 
 ## Transparency announcement format
 
-Update from the existing `(anthropic:opus)` form to `(vendor:tier)`. The concrete model identifier lives in the dispatch log; the announcement stays compact.
+Keep the backward-compatible `(vendor:tier)` tag and add a separate effort summary. The concrete model identifier lives in the dispatch log.
 
 Example (Standard milestone with cross-vendor enabled):
 
-> Team for `M07-T03-DEV`: `lead-architect (claude:high)`, `codex-architect (codex:high, mode=challenge)`, `codex-spec-to-test (codex:mid)`, `developer (claude:mid)`, `codex-verification (codex:mid)`, `codex-code-reviewer (codex:mid)`, `qa (claude:mid)`, `codex-security-reviewer (codex:high)`, `doc-writer (claude:mid)`. Pairing: architect Co-Approval (Claude / Codex); test author (Codex) ≠ implementer (Claude); implementer (Claude) ≠ reviewer/verifier/security (Codex). QA and docs single-vendor.
+> Team for `M07-T03-DEV`: `lead-architect (claude:high)`, `codex-architect (codex:high, mode=challenge)`, `codex-spec-to-test (codex:mid)`, `developer (claude:mid)`, `codex-verification (codex:mid)`, `codex-code-reviewer (codex:mid)`, `qa (claude:mid)`, `codex-security-reviewer (codex:high)`, `doc-writer (claude:mid)`. Effort: architects/security=high; remaining roles=medium. Pairing: architect Co-Approval (Claude / Codex); test author (Codex) != implementer (Claude); implementer (Claude) != reviewer/verifier/security (Codex). QA and docs single-vendor.
 
 ## What this policy is not
 
 - **Not a substitute for the Co-Approval Rule.** The architect Co-Approval Rule (Lead and Challenger both `approved: true`) applies whether or not broader cross-vendor pairing is enabled. They compose; they don't replace each other.
 - **Not "run both vendors in parallel as verifiers."** Doubling verifier dispatches would multiply cost without commensurate benefit. The alternation rule provides cross-vendor coverage at the same dispatch count as single-vendor.
 - **Not forced on Critical Mode.** Critical Mode is high-stakes but the cost surface is real. Users opt in per milestone; auto-escalation does not force cross-vendor on.
-- **Not a substitute for the tier system.** Pairing decides *which vendor* — tier decides *which model on that vendor*. Both questions must be answered for every dispatch.
+- **Not a substitute for model/effort selection.** Pairing decides *which vendor*; `model_tier` chooses the model profile; `effort` chooses reasoning depth. All three decisions are explicit.
 
 ## Three-vendor pairing (v0.11+)
 

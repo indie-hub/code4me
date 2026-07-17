@@ -135,11 +135,12 @@ RETURN SCHEMA:
 ## Invocation
 
 ```
-timeout 240 codex exec --model {resolved_model} --prompt-file /tmp/codex-cr-{task_id}.txt \
+codex exec --model {resolved_model} -c 'model_reasoning_effort="{resolved_effort}"' - \
+  < /tmp/codex-cr-{task_id}.txt \
   > /tmp/codex-cr-{task_id}.out 2> /tmp/codex-cr-{task_id}.err
 ```
 
-240s timeout — review work is faster than implementation. Exit codes: 0 → parse; 124 → `codex_timeout`; 127 → `codex_cli_not_installed`; other → `codex_error`.
+Use a 240s host tool/process timeout. Exit codes: 0 → parse; host timeout → `codex_timeout`; 127 → `codex_cli_not_installed`; other → `codex_error`.
 
 ## Validation
 

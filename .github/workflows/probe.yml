@@ -103,11 +103,11 @@ jobs:
 
       - name: Shellcheck test scripts
         run: |
-          shellcheck --severity=warning --shell=bash tests/hooks/*.sh tests/audit4me/*.sh tests/install/*.sh
+          shellcheck --severity=warning --shell=bash tests/hooks/*.sh tests/audit4me/*.sh tests/audit/*.sh tests/install/*.sh tests/models/*.sh tests/probes/*.sh
 
       - name: Validate audit4me JSON schemas
         run: |
-          for f in skills/audit4me/schemas/*.json; do
+          for f in skills/audit4me/schemas/*.json skills/code4me/schemas/*.json; do
             jq empty "$f" && echo "OK: $f"
           done
 
@@ -125,6 +125,9 @@ jobs:
         run: |
           jq empty .claude-plugin/plugin.json
           jq empty .codex-plugin/plugin.json
+          for f in skills/audit4me/schemas/*.json skills/code4me/schemas/*.json; do
+            jq empty "$f" && echo "OK: $f"
+          done
 
       - name: Hook syntax check
         run: |
@@ -139,13 +142,21 @@ jobs:
         run: |
           shellcheck --severity=warning --shell=bash \
             bin/audit4me-helpers.sh bin/audit4me-rebuild-coverage.sh \
-            tests/hooks/*.sh tests/audit4me/*.sh tests/install/*.sh
+            tests/hooks/*.sh tests/audit4me/*.sh tests/audit/*.sh tests/install/*.sh tests/models/*.sh tests/probes/*.sh
 
       - name: New-script syntax check (bash 3.2 path)
         run: |
-          for f in hooks/c4m-pathlib.sh bin/code4me-install bin/code4me-install-deps bin/code4me-claude-wrapper-run bin/audit4me-helpers.sh bin/audit4me-rebuild-coverage.sh tests/hooks/*.sh tests/audit4me/*.sh tests/install/*.sh; do
+          for f in hooks/c4m-pathlib.sh bin/code4me-install bin/code4me-install-deps bin/code4me-claude-wrapper-run bin/code4me-probe-run bin/audit4me-helpers.sh bin/audit4me-rebuild-coverage.sh tests/hooks/*.sh tests/audit4me/*.sh tests/audit/*.sh tests/install/*.sh tests/models/*.sh tests/probes/*.sh; do
             bash -n "$f" && echo "OK: $f"
           done
+
+      - name: Model, audit, probe, and wrapper behavioral tests
+        run: |
+          bash tests/models/test-model-routing.sh
+          bash tests/audit/test-dispatch-log.sh
+          bash tests/probes/test-structure.sh
+          bash tests/probes/test-probe-run.sh
+          bash tests/install/test-claude-wrapper-run.sh
 
       - name: macOS bash version warning
         run: |
@@ -172,22 +183,34 @@ jobs:
           jq empty .claude-plugin/plugin.json
           jq empty .codex-plugin/plugin.json
           jq empty hooks/hooks.json
+          for f in skills/audit4me/schemas/*.json skills/code4me/schemas/*.json; do
+            jq empty "$f" && echo "OK: $f"
+          done
           for f in templates/project-starter/*.json templates/project-starter/*.json.example; do
             [ -r "$f" ] && jq empty "$f" && echo "OK: $f"
           done
 
       - name: Syntax check
         run: |
-          for f in hooks/*.sh tests/hooks/*.sh tests/install/*.sh; do
+          for f in hooks/*.sh tests/hooks/*.sh tests/install/*.sh tests/audit/*.sh tests/models/*.sh tests/probes/*.sh; do
             bash -n "$f" && echo "OK: $f"
           done
           bash -n bin/code4me-install
           bash -n bin/code4me-install-deps
           bash -n bin/code4me-claude-wrapper-run
+          bash -n bin/code4me-probe-run
           bash -n bin/code4me-preflight
 
       - name: Windows path-normalization regression test
         run: bash tests/hooks/test-windows-paths.sh
+
+      - name: Model, audit, probe, and wrapper behavioral tests
+        run: |
+          bash tests/models/test-model-routing.sh
+          bash tests/audit/test-dispatch-log.sh
+          bash tests/probes/test-structure.sh
+          bash tests/probes/test-probe-run.sh
+          bash tests/install/test-claude-wrapper-run.sh
 
   tests:
     name: Unit + regression tests (Linux)
@@ -213,3 +236,11 @@ jobs:
       - name: installer + session-wiring tests
         run: |
           for t in tests/install/*.sh; do bash "$t"; done
+
+      - name: model, audit, probe, and wrapper contract tests
+        run: |
+          bash tests/models/test-model-routing.sh
+          bash tests/audit/test-dispatch-log.sh
+          bash tests/probes/test-structure.sh
+          bash tests/probes/test-probe-run.sh
+          bash tests/install/test-claude-wrapper-run.sh

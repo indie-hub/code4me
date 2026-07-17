@@ -1,6 +1,6 @@
 ---
-description: Run the code4me probe suite programmatically via bin/code4me-probe-run. Each probe's Input prompt is presented for you to paste into a fresh Claude Code session; you paste the orchestrator's response back; an LLM-as-judge compares the response against the probe's Expected block and writes a JSONL result. Optional argument restricts to a probe subdirectory (classification | team-composition | auto-escalation | external-agents | hooks | cross-vendor).
-argument-hint: [classification | team-composition | auto-escalation | external-agents | hooks | cross-vendor | <specific probe path>]
+description: Run the code4me probe suite via bin/code4me-probe-run. Each probe's Input prompt is presented for a fresh agent session; an LLM-as-judge evaluates its full Expected and Pass criterion contract and writes a JSONL result.
+argument-hint: [classification | team-composition | auto-escalation | external-agents | hooks | cross-vendor | model-routing | improve | <specific probe path>]
 ---
 
 Wrapper for `bin/code4me-probe-run`. Run the script with the user's argument (or all probes if no argument given) and stream its output.
@@ -19,6 +19,9 @@ Procedure:
    - No argument → runs every probe under `<PLUGIN_DIR>/probes/`
    - A subdirectory name (e.g., `classification`) → runs every probe in `<PLUGIN_DIR>/probes/classification/`
    - A specific probe path (relative or absolute) → runs just that probe
+   - `--output PATH` → writes results directly to an existing writable parent
+   - `--manifest PATH --output PATH` → runs a hash-verified external held-out
+     manifest and keeps its evidence outside the candidate worktree
 
 3. The script is interactive: for each probe, it prints the Input prompt and waits for the user to paste the orchestrator's response (terminated by a line containing `EOF` on its own). The user must run each probe in a separate fresh Claude Code session, then copy the orchestrator's full response back into this terminal. The script handles the LLM-as-judge comparison and writes results to `<PLUGIN_DIR>/probes/results-{YYYY-MM-DDTHHMMSS}.jsonl`.
 

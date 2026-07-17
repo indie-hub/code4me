@@ -123,11 +123,12 @@ RETURN SCHEMA:
 ## Invocation
 
 ```
-timeout 360 codex exec --model {resolved_model} --prompt-file /tmp/codex-s2t-{task_id}.txt \
+codex exec --model {resolved_model} -c 'model_reasoning_effort="{resolved_effort}"' - \
+  < /tmp/codex-s2t-{task_id}.txt \
   > /tmp/codex-s2t-{task_id}.out 2> /tmp/codex-s2t-{task_id}.err
 ```
 
-360s — generation needs more headroom than review. Exit codes: 0 → parse; 124 → `codex_timeout`; 127 → `codex_cli_not_installed`; other → `codex_error`.
+Use a 360s host tool/process timeout. Exit codes: 0 → parse; host timeout → `codex_timeout`; 127 → `codex_cli_not_installed`; other → `codex_error`.
 
 ## Validation + post-processing
 

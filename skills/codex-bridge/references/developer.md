@@ -165,11 +165,12 @@ RETURN SCHEMA:
 ## Invocation
 
 ```
-timeout 600 codex exec --model {resolved_model} --prompt-file /tmp/codex-dev-{task_id}.txt \
+codex exec --model {resolved_model} -c 'model_reasoning_effort="{resolved_effort}"' - \
+  < /tmp/codex-dev-{task_id}.txt \
   > /tmp/codex-dev-{task_id}.out 2> /tmp/codex-dev-{task_id}.err
 ```
 
-600s timeout for all three modes (implement is the slowest; review-diff and spike usually finish well under). Exit codes: 0 → parse; 124 → `codex_timeout`; 127 → `codex_cli_not_installed`; other non-zero → `codex_error` with stderr tail.
+Use a 600s host tool/process timeout for all three modes. Exit codes: 0 → parse; host timeout → `codex_timeout`; 127 → `codex_cli_not_installed`; other non-zero → `codex_error` with stderr tail.
 
 ## Validation
 

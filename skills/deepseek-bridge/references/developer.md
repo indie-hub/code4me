@@ -165,16 +165,13 @@ RETURN SCHEMA:
 ## Invocation
 
 ```
-timeout 600 reasonix run \
-  --model {resolved_model} \
-  --effort {resolved_effort} \
-  --transcript /tmp/deepseek-dev-{task_id}.transcript.jsonl \
+reasonix run --model {reasonix_provider_alias} \
   "$(cat /tmp/deepseek-dev-{task_id}.txt)" \
   > /tmp/deepseek-dev-{task_id}.out \
   2> /tmp/deepseek-dev-{task_id}.err
 ```
 
-600s timeout for all three modes (implement is the slowest; review-diff and spike usually finish well under). Exit codes: 0 → parse; 124 → `deepseek_timeout`; 127 → `reasonix_cli_not_installed`; other non-zero → `deepseek_subprocess_error` with stderr tail.
+Use a 600s host tool/process timeout for all three modes. Exit codes: 0 → parse; host timeout → `deepseek_timeout`; 127 → `reasonix_cli_not_installed`; other non-zero → `deepseek_subprocess_error` with stderr tail.
 
 ## Validation
 

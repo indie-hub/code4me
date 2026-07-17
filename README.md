@@ -2,7 +2,7 @@
 
 **A multi-agent SDLC orchestrator for Claude Code and Codex.** Turn a one-line user request into a structured workflow: a lead architect designs, a challenger architect critiques, a spec-to-test engineer authors the test gate, a developer implements, and a quality-gate loop (verification + code review + QA) attests the work — all dispatched as agent roles, with optional cross-vendor pairing through OpenAI's Codex CLI or DeepSeek's Reasonix CLI for dialectic.
 
-**Status:** `0.13.4-dev` — actively soaking against real milestones. Public-release prep underway (Phase 1 portability done; Phase 2 community infrastructure landing now).
+**Status:** `0.14.0-dev` — adaptive model/effort routing and supervised improve mode are in development.
 
 ## What it does, concretely
 
@@ -14,7 +14,7 @@ The orchestrator:
 
 1. **Classifies** the request (Standard weight, kind=product, no auto-escalation).
 2. **Decomposes** the milestone into ≥1 task per acceptance criterion (v0.12+) — 3 ACs → typically 5-7 dispatched tasks, mapped explicitly.
-3. **Announces the team** before any dispatch: *"Team for M07 (Standard): lead-architect (claude:high), challenger-architect (claude:high), spec-to-test (claude:mid), developer (claude:mid), verification (claude:mid), code-reviewer (claude:mid), qa (claude:mid), doc-writer (claude:mid)."*
+3. **Announces the team** before any dispatch, including independent model/effort choices: *"Team for M07 (Standard): lead-architect (claude:high), developer (claude:mid), verification (claude:mid), ... Effort: architect=high; developer/verification=medium."*
 4. **Dispatches** each subagent via the Task tool, persists artefacts (Tech Spec, Test Spec, AC mapping) under `.code4me/`, and routes INSIGHT messages between roles.
 5. **Optionally projects** the milestone to a Trello Kanban board — one card per acceptance criterion, cards move from Inbox → In Progress → In Review → Done as gates pass.
 6. **Closes** with verification's AC coverage table, the code-review verdict, and (if applicable) the doc-writer's user-doc updates.
@@ -67,7 +67,7 @@ claude-p --doctor
 
 `claude-p` comes from [indie-hub/claude-wrapper](https://github.com/indie-hub/claude-wrapper). It lets a Codex Producer consult local Claude Code through the user's existing Claude Code login state. It is optional; code4me still works in Codex without it.
 
-code4me's bounded subprocess helper is `bin/code4me-claude-wrapper-run`; it invokes `claude-p --output-format json` with an explicit prompt file, cwd, timeout, and optional model/session metadata.
+code4me's bounded subprocess helper is `bin/code4me-claude-wrapper-run`; it invokes `claude-p --output-format json` with an explicit prompt file, cwd, timeout, and optional model, effort, and session metadata.
 
 For OpenAI/DeepSeek cross-vendor agents:
 
@@ -83,7 +83,7 @@ Then start Codex in the target project and use the same code4me commands/prompts
 
 1. **Five workflow weights, not one process.** Trivial / Conversation / Light / Standard / Critical. The orchestrator classifies per-request and runs the smallest workflow that satisfies the stakes. A typo fix doesn't pay Standard-Mode dispatch overhead; a Critical change gets dual architect Co-Approval, full quality-gate loop, and Security Review. v0.13 adds an orthogonal **solo execution mode**: on explicit request, the orchestrator implements Conversation/Light/Standard work inline — loop speed — while still dispatching one fresh-context review gate and keeping the protection hooks binding on its own edits.
 2. **The Producer is the orchestrator, you're the Product Owner.** No separate PM role to coordinate. The orchestrator does classification, team composition, dispatch, persistence, and routing. You confirm intent, sign off on closes, and stay out of the dispatch loop.
-3. **Multi-vendor pairing without inventing new CLIs.** OpenAI's `codex exec` and DeepSeek's `reasonix run` are vendor-native agentic CLIs. The plugin's two bridge skills (`codex-bridge`, `deepseek-bridge`) spawn them as subprocesses with the orchestrator's prompts and parse structured returns — symmetric architecture, fully opt-in, gracefully degrades when a CLI is missing.
+3. **Adaptive routing without silent vendor changes.** Model profile and reasoning effort are separate decisions. Vendor bridges remain explicit opt-ins; changing effort never enables Codex, DeepSeek, or Claude wrapper participation.
 4. **Hooks ask, never deny.** Four PreToolUse hooks (test protection, Conversation-Mode forbidden conditions, Critical-Mode write allowlist, structural-first redirect) all return `permissionDecision: ask`. A misconfigured hook is a warning, never a hard block. Defense-in-depth without panic-button risk.
 5. **Probes are the spec.** Every behaviour the orchestrator promises has a corresponding probe under `probes/`. Regressions are caught by running the probe suite (`bin/code4me-probe-run`). The audit tool (`bin/code4me-audit-dispatch-log`) reads the dispatch-log JSONL to surveille drift in dispatch patterns, cost rollups, hook ask-gate rates, and Trivial-weight classification frequency.
 
@@ -102,6 +102,19 @@ All optional — the plugin works fully without any of them:
 - **[DeepSeek / Reasonix CLI](docs/howto-enable-deepseek.md)** — enables the `deepseek-bridge` skill for DeepSeek models. Authentication via `DEEPSEEK_API_KEY` env var OR the wizard-populated `~/.reasonix/config.json`.
 - **[Trello MCP](skills/trello-sync/SKILL.md)** — projects the milestone tracker to a Trello board. One card per acceptance criterion (v0.12+).
 - **[Spec Kit](docs/howto-use-spec-kit.md)** — consume GitHub Spec Kit `spec.md` / `plan.md` artifacts at intake.
+
+## Current model and effort routing
+
+| Profile | Anthropic | OpenAI | DeepSeek |
+|---|---|---|---|
+| `low` | `claude-haiku-4-5` | `gpt-5.6-luna` | `deepseek-v4-flash` |
+| `mid` | `claude-sonnet-5` | `gpt-5.6-terra` | `deepseek-v4-pro` |
+| `high` | `claude-opus-4-8` | `gpt-5.6-sol` | `deepseek-v4-pro` |
+
+Anthropic `claude-fable-5` is an explicit-only frontier option. Effort defaults
+to `low`, `medium`, or `high` independently of the model profile; `xhigh` and
+`max` require an explicit deviation and backend support. Current Reasonix does
+not apply effort, so DeepSeek dispatches record `effort_applied: false`.
 
 ## Documentation
 
@@ -124,7 +137,7 @@ The docs follow a [Diataxis](https://diataxis.fr/) split:
   - [Run on Windows](docs/howto-windows.md)
 - **[Reference](docs/reference.md)** — workflow weights, all subagents, slash commands, model tiers, cross-vendor pairing, runtime hooks, audit and analytics, context-query schema, dispatch log shape, folder layout.
 - **[Explanation](docs/explanation.md)** — design-decision rationale. Why five weights, why Co-Approval, why Producer-as-orchestrator, why opt-in cross-vendor, why hooks ask instead of deny.
-- **[Roadmap](docs/roadmap.md)** — ear-tagged work that's been considered, scoped, and intentionally deferred. Twelve active items as of v0.13.4-dev; explicit trigger conditions on the conditional ones.
+- **[Roadmap](docs/roadmap.md)** — ear-tagged work that's been considered, scoped, and intentionally deferred; explicit trigger conditions on conditional items.
 - **[audit4me design](docs/audit4me-design.md)** — sibling product spec. Batch, after-hours, cross-vendor codebase auditor. Proposes fixes; code4me applies them via Conversation Mode. Phase 0 (data model + read-only surface) shipped in v0.13.0-dev; Phase 1+ gated on code4me v0.12 soak.
 - **[audit4me build plan](docs/audit4me-build-plan.md)** — operational plan with per-phase sub-tasks, gates, open decisions, and rhythm. Living doc; updated as phases ship.
 
@@ -139,16 +152,19 @@ The docs follow a [Diataxis](https://diataxis.fr/) split:
 | `/code4me-status [milestone_id]` | Read-only snapshot of `.code4me/` |
 | `/code4me-promote-or-revert <task_id>` | Close the Conversation Mode loop |
 | `/code4me-probe-run [subdir\|path]` | Programmatic probe runner with regression budget |
+| `/code4me-improve --held-out-manifest PATH [subdir\|path]` | Supervised baseline/candidate experiment with isolated held-out evaluation and explicit keep/revert |
 | `/code4me-audit [path]` | Dispatch-log analytics |
 | `/code4me-trello-init` | One-time Trello board scaffold |
 | `/code4me-housekeeping` | Session-boundary checkpoint (audit + handoff manifest for safe resume) |
 | `/audit4me-config` | One-time audit4me setup (vendor probe + config scaffold) |
+| `/audit4me-run` | Run the configured audit4me sweep |
 | `/audit4me-status` | Read-only audit4me coverage report |
 
 ## What's new
 
 The [CHANGELOG](CHANGELOG.md) carries the version-by-version history with rationale per cut. Headline arc:
 
+- **v0.14** — current Anthropic/OpenAI/DeepSeek mappings, independent model and effort routing, project-overrideable Reasonix aliases, full-contract probe judging, and supervised `/code4me-improve` experiments with executable external held-out evaluation.
 - **v0.13.2** — Codex plugin manifest, Codex-as-orchestrator guidance, dependency checker/installer (`bin/code4me-install-deps`), Basic Memory replacing OpenWolf/buglog, CocoIndex support, `claude-p` subprocess helper/docs/preflight, optional Codex hooks template, and structural-first ordering so context-mode stays behind codegraph/CocoIndex.
 - **v0.13.1** — audit4me Phase 1, self-locating project installer, session-wiring detector, Windows path-normalization tests, and legacy LSP made opt-in.
 - **v0.13** — solo execution mode, structural-index-first source lookup, codegraph integration, and public-release portability work.

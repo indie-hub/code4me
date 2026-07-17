@@ -111,10 +111,7 @@ RETURN SCHEMA:
 ## Invocation
 
 ```
-timeout 360 reasonix run \
-  --model {resolved_model} \
-  --effort {resolved_effort} \
-  --transcript /tmp/deepseek-la-{task_id}.transcript.jsonl \
+reasonix run --model {reasonix_provider_alias} \
   "$(cat /tmp/deepseek-la-{task_id}.txt)" \
   > /tmp/deepseek-la-{task_id}.out \
   2> /tmp/deepseek-la-{task_id}.err

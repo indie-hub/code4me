@@ -15,7 +15,7 @@ They are **not** unit tests. They are diagnostic prompts whose answers a human c
 
 - Numeric prefix to fix ordering: `01-`, `02-`, ...
 - Kebab-case slug describing the scenario: `01-conversation-cosmetic.md`, `07-conversation-touches-auth.md`.
-- Lives in one of three subdirectories matching `Subject`: `classification/`, `team-composition/`, `auto-escalation/`.
+- Lives in a subject-named subdirectory such as `classification/`, `team-composition/`, `model-routing/`, or `improve/`.
 
 ## When to re-run
 
@@ -33,7 +33,7 @@ After running a probe suite, the user records the actual orchestrator output in 
 
 **For the v0.8+ programmatic runner workflow** — when to capture a new baseline, how the runner detects flips, how to tune the regression budget — see `docs/probe-baselines.md`. The short version:
 
-1. Run `bin/code4me-probe-run` — interactive; each probe is pasted into a fresh Claude Code session, the response is captured on stdin, the LLM-as-judge compares against the Expected block, and a `results-{stamp}.jsonl` is written.
+1. Run `bin/code4me-probe-run` — interactive; each probe is pasted into a fresh Claude Code session, the response is captured on stdin, the LLM-as-judge evaluates every requirement in the Expected and Pass criterion blocks, and a `results-{stamp}.jsonl` is written. Use `--output PATH` for external evidence; `--manifest PATH` runs a hash-verified held-out manifest and requires external output.
 2. The runner compares results against `probes/baseline.jsonl` and reports flips (probes whose outcome differs from the baseline). The configurable threshold `max_flips` in `probes/budget.toml` is the budget; exceeded → non-zero exit code.
 3. When the framework changes and you've verified the new behaviour is correct, run `bin/code4me-probe-run --update-baseline` to promote the latest results to the new baseline. The flag is skipped if any probe errored (a broken environment can't accidentally become the reference).
 

@@ -41,7 +41,7 @@ Preflight reports `Claude wrapper (optional)` when `claude-p` is on `PATH`.
 When Codex needs a Claude-side role, use the bounded helper instead of calling an interactive session directly:
 
 ```bash
-bash bin/code4me-claude-wrapper-run --prompt-file prompt.md --cwd "$PWD" --timeout-sec 300
+bash bin/code4me-claude-wrapper-run --prompt-file prompt.md --cwd "$PWD" --timeout-sec 300 --effort medium
 ```
 
-The helper emits `claude-p --output-format json` output and accepts `--model`, `--session-id`, and `--raw-log` when a dispatch needs those fields.
+The helper emits `claude-p --output-format json` output and accepts `--model`, `--effort low|medium|high|xhigh|max`, `--session-id`, and `--raw-log`. It validates effort and forwards it to `claude-p` unchanged.

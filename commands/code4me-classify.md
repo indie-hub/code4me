@@ -13,8 +13,9 @@ Run the code4me orchestrator's intake and classification flow on the following r
 6. Decide the **team** for this task per `references/team-templates.md` and the hard floors in `SKILL.md`.
 7. If cross-vendor pairing is enabled for the milestone (check intake; default off), apply the alternation rule from `references/cross-vendor-policy.md` and resolve per-role vendor.
 8. Resolve the **tier** per role from `references/model-selection.yaml` → resolve concrete model via `references/vendor-models.yaml`.
-9. **Emit the Team Transparency announcement** in the format from `references/playbook.md` ("Transparency announcement format") — with `(vendor:tier)` annotations and the pairing summary when applicable.
-10. **Do NOT** call the Task tool. **Do NOT** persist to `.code4me/`. **Do NOT** write any artifacts.
+9. Independently resolve each role's **effort**, default effort, deviation, source, and backend application status from `references/model-selection.yaml` and the selected backend contract.
+10. **Emit the Team Transparency announcement** in the format from `references/playbook.md` ("Transparency announcement format") — with backward-compatible `(vendor:tier)` annotations, the resolved effort summary, and the pairing summary when applicable.
+11. **Do NOT** call the Task tool. **Do NOT** persist to `.code4me/`. **Do NOT** write any artifacts.
 
 This is read-only classification. After the announcement, surface a one-line note: *"Classification only — no dispatch performed. Re-run without `/code4me-classify` or invoke `/code4me-dispatch <weight>` to execute."*
 

@@ -4,7 +4,7 @@ This directory is the seed layout the code4me orchestrator copies into a project
 
 Contents:
 
-- `milestone-status-tracker.md` — template for the per-milestone status table. The orchestrator renames or duplicates it as `milestone-status-{milestone_id}.md` and updates it on every state change. Tracks task ID, dispatched subagent, dispatched `vendor:model`, status, timestamps, and notes.
+- `milestone-status-tracker.md` — template for the per-milestone status table. The orchestrator renames or duplicates it as `milestone-status-{milestone_id}.md` and updates it on every state change. Tracks task ID, dispatched subagent, concrete `vendor:model`, requested effort, status, timestamps, and notes.
 - `insight-register-TEMPLATE.md` — template for the per-milestone INSIGHT register. The orchestrator renames it as `insight-register-{milestone_id}.md` and appends entries as subagents emit INSIGHTs in their return payloads. Envelope shape comes from `skills/code4me/references/insight.md`.
 - `conversation-notes/` — destination for Conversation-weight `Conversation Note` artifacts. Populated by the orchestrator from `templates/conversation_note.md` per task.
 - `milestone-specs/` — destination for Light / Standard / Critical Milestone Specs.

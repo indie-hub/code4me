@@ -96,10 +96,7 @@ Same template structure as `diff-focused`. Differences: INPUTS carries surface (
 ## Invocation
 
 ```
-timeout 300 reasonix run \
-  --model {resolved_model} \
-  --effort {resolved_effort} \
-  --transcript /tmp/deepseek-sec-{task_id}.transcript.jsonl \
+reasonix run --model {reasonix_provider_alias} \
   "$(cat /tmp/deepseek-sec-{task_id}.txt)" \
   > /tmp/deepseek-sec-{task_id}.out \
   2> /tmp/deepseek-sec-{task_id}.err

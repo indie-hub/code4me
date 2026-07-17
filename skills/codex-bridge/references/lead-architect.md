@@ -111,11 +111,12 @@ RETURN SCHEMA:
 ## Invocation
 
 ```
-timeout 300 codex exec --model {resolved_model} --prompt-file /tmp/codex-la-{task_id}.txt \
+codex exec --model {resolved_model} -c 'model_reasoning_effort="{resolved_effort}"' - \
+  < /tmp/codex-la-{task_id}.txt \
   > /tmp/codex-la-{task_id}.out 2> /tmp/codex-la-{task_id}.err
 ```
 
-300s timeout. Exit codes: standard mapping.
+Use a 300s host tool/process timeout. Do not depend on GNU `timeout`.
 
 ## Validation
 

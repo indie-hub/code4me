@@ -2,7 +2,7 @@
 # code4me-claude-wrapper-run -- bounded claude-p subprocess helper for Codex.
 #
 # Usage:
-#   bin/code4me-claude-wrapper-run --prompt-file prompt.md [--cwd DIR]
+#   bin/code4me-claude-wrapper-run --prompt-file prompt.md [--cwd DIR] [--effort LEVEL]
 #   bin/code4me-claude-wrapper-run --prompt "role prompt" [--cwd DIR]
 #   bin/code4me-claude-wrapper-run --dry-run --prompt "role prompt"
 
@@ -12,6 +12,7 @@ CLAUDE_P_BIN="${CLAUDE_P_BIN:-claude-p}"
 TIMEOUT_SEC=300
 CWD="$PWD"
 MODEL=""
+EFFORT=""
 SESSION_ID=""
 RAW_LOG=""
 PROMPT=""
@@ -55,6 +56,11 @@ while [ "$#" -gt 0 ]; do
             MODEL="$2"
             shift
             ;;
+        --effort)
+            need_value "$@"
+            EFFORT="$2"
+            shift
+            ;;
         --session-id)
             need_value "$@"
             SESSION_ID="$2"
@@ -96,12 +102,18 @@ case "$TIMEOUT_SEC" in
     0) die "--timeout-sec must be a positive integer" ;;
 esac
 
+case "$EFFORT" in
+    ''|low|medium|high|xhigh|max) ;;
+    *) die "--effort must be one of: low, medium, high, xhigh, max" ;;
+esac
+
 if [ "$DRY_RUN" -eq 0 ]; then
     command -v "$CLAUDE_P_BIN" >/dev/null 2>&1 || die "claude-p not found on PATH (or set CLAUDE_P_BIN)"
 fi
 
 cmd=( "$CLAUDE_P_BIN" --output-format json --timeout-sec "$TIMEOUT_SEC" --cwd "$CWD" )
 [ -n "$MODEL" ] && cmd+=( --model "$MODEL" )
+[ -n "$EFFORT" ] && cmd+=( --effort "$EFFORT" )
 [ -n "$SESSION_ID" ] && cmd+=( --session-id "$SESSION_ID" )
 [ -n "$RAW_LOG" ] && cmd+=( --raw-log "$RAW_LOG" )
 cmd+=( "$PROMPT" )

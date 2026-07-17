@@ -55,7 +55,7 @@ A Standard milestone with cross-vendor enabled:
 
 > Team for `M07-T03-DEV` (Standard, cross-vendor enabled): `lead-architect (claude:high)`, `codex-architect (codex:high, mode=challenge)`, `codex-spec-to-test (codex:mid)`, `developer (claude:mid)`, `codex-verification (codex:mid)`, `codex-code-reviewer (codex:mid)`, `qa (claude:mid)`, `doc-writer (claude:mid)`. **Pairing**: architect Co-Approval (Claude/Codex); test author (Codex) ≠ implementer (Claude); implementer (Claude) ≠ reviewer/verifier (Codex). QA and docs single-vendor.
 
-The `(vendor:tier)` annotation is the load-bearing audit signal. Concrete model identifiers go in the dispatch log.
+The `(vendor:tier)` annotation remains the load-bearing model signal. The announcement also includes a separate effort summary; concrete model identifiers and effort-application status go in the dispatch log.
 
 ## What happens when a shim is unavailable
 

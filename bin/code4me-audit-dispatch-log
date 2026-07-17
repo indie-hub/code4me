@@ -180,6 +180,8 @@ fi
 
 distribution_table 'Vendor split'             '.vendor // "unknown"'
 distribution_table 'Tier distribution'        '.model_tier // "unknown"'
+distribution_table 'Effort distribution'      '.effort // "legacy/unspecified"'
+distribution_table 'Effort application'       'if .effort_applied == true then "applied" elif .effort_applied == false then "not applied" else "legacy/unspecified" end'
 distribution_table 'Outcome distribution'     '.outcome // "unknown"'
 
 # Vendor × tier cost rollup.
@@ -201,6 +203,22 @@ if [ -n "$HAS_TIER" ]; then
     printf '\n'
 fi
 
+# Independent effort deviation (v0.14+). Old entries omit these fields and are
+# counted as legacy/unspecified by the distribution tables above.
+EFFORT_DEVIATED=$(jq -r 'select(.effort_deviated_from_default == true) | .subagent' "$LOG" 2>/dev/null | wc -l | tr -d ' ')
+EFFORT_RECORDED=$(jq -r 'select(.effort != null) | .effort' "$LOG" 2>/dev/null | wc -l | tr -d ' ')
+printf '## Effort deviation (v0.14+)\n\n'
+printf 'Recorded effort: **%s of %s** dispatches; deviated from default: **%s**.\n\n' "$EFFORT_RECORDED" "$TOTAL" "$EFFORT_DEVIATED"
+
+if [ "$EFFORT_DEVIATED" -gt 0 ]; then
+    printf '| Subagent | Default | Actual | Source | Applied | Count |\n'
+    printf '|---|---|---|---|---|---:|\n'
+    jq -r 'select(.effort_deviated_from_default == true) | "\(.subagent // "unknown")|\(.default_effort // "?")|\(.effort // "?")|\(.effort_source // "?")|\(if .effort_applied == true then "yes" elif .effort_applied == false then "no" else "unknown" end)"' "$LOG" 2>/dev/null | \
+        sort | uniq -c | sort -rn | \
+        awk -F'|' '{ split($1, a, " "); count = a[1]; sub(/^[[:space:]]*[0-9]+[[:space:]]+/, "", $1); printf "| %s | %s | %s | %s | %s | %d |\n", $1, $2, $3, $4, $5, count }'
+    printf '\n'
+fi
+
 # Weight × outcome heatmap.
 printf '## Weight \xc3\x97 outcome\n\n'
 printf '_Cross-tab of dispatched weight against returned outcome. Persistent FAIL/REWORK clusters at a specific weight are signal that the workflow gates need tuning — or that the weight is being mis-classified at intake._\n\n'
@@ -208,7 +226,7 @@ printf '_Cross-tab of dispatched weight against returned outcome. Persistent FAI
     # Build the matrix via awk
     jq -r '"\(.weight // "unknown")\t\(.outcome // "unknown")"' "$LOG" 2>/dev/null | \
         awk -F'\t' '
-            { matrix[$1][$2]++; weights[$1]; outcomes[$2] }
+            { matrix[$1 SUBSEP $2]++; weights[$1]; outcomes[$2] }
             END {
                 # Sort outcomes
                 n_o = 0; for (o in outcomes) ordered_outcomes[++n_o] = o
@@ -230,7 +248,7 @@ printf '_Cross-tab of dispatched weight against returned outcome. Persistent FAI
                     if (!(weight in weights)) continue
                     printf "| %s", weight
                     for (i = 1; i <= n_o; i++) {
-                        v = matrix[weight][ordered_outcomes[i]] + 0
+                        v = matrix[weight SUBSEP ordered_outcomes[i]] + 0
                         if (v > 0) printf " | %d", v; else printf " | "
                     }
                     printf " |\n"
@@ -242,7 +260,7 @@ printf '_Cross-tab of dispatched weight against returned outcome. Persistent FAI
                     if (seen) continue
                     printf "| %s", weight
                     for (i = 1; i <= n_o; i++) {
-                        v = matrix[weight][ordered_outcomes[i]] + 0
+                        v = matrix[weight SUBSEP ordered_outcomes[i]] + 0
                         if (v > 0) printf " | %d", v; else printf " | "
                     }
                     printf " |\n"

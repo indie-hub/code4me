@@ -76,9 +76,9 @@ When you receive a request, run this loop:
 
    - **DeepSeek bridge dispatch gate (v0.11):** Never invoke the `deepseek-bridge` skill (see `skills/deepseek-bridge/SKILL.md`) unless one of the following is true: (a) the user named a specific DeepSeek role at intake (e.g., "use deepseek-architect for this", "have deepseek-developer implement", "let deepseek do the security review"), OR (b) the user explicitly enabled cross-vendor pairing for this milestone AND DeepSeek is in the pairing set — they used the words "cross-vendor", "alternation", "alternation policy", or the `--cross-vendor` flag on `/code4me-dispatch`, AND either an explicit DeepSeek mention OR a project-level cross-vendor default in `CLAUDE.md` that lists `deepseek` as one of the vendors. **Inferring cross-vendor (or DeepSeek specifically) from the work's nature, the symptom-class list, the team-template's pairing column, or the perceived benefit of dialectic is a workflow violation** — when uncertain whether the user wants DeepSeek involvement, surface as `NEEDS_DECISION` and ask. DeepSeek bridging is opt-in by design, with the same default-off discipline as Codex bridging.
 
-	     **Note on mechanism (v0.11):** The bridge invokes the **Reasonix CLI** (`reasonix run`) — a DeepSeek-native agentic coding agent built around DeepSeek's prefix-cache and tool-call semantics. The orchestrator writes a prompt file, runs `reasonix run --model {id} --effort {level} --transcript {path} "<task>"` via Bash, extracts the fenced JSON block from stdout, and validates. Auth is the Reasonix CLI's responsibility (it accepts EITHER `$DEEPSEEK_API_KEY` env var OR the apiKey in `~/.reasonix/config.json` — populated by Reasonix's first-run wizard). The bridge does NOT pre-check auth. Pre-flight is `command -v reasonix` only; auth failures surface at invocation as `deepseek_subprocess_error`. Install Reasonix with `npm install -g reasonix`. See `skills/deepseek-bridge/SKILL.md` for the full invocation contract.
+	     **Note on mechanism (v0.11):** The bridge invokes the **Reasonix CLI** (`reasonix run`). It translates the selected DeepSeek model to a configured provider alias (`deepseek-flash` or `deepseek-pro`), verifies the alias/model with redacted `reasonix doctor --json` output, and passes the prompt positionally. Current Reasonix does not expose an effort flag, so DeepSeek dispatches record requested effort as metadata with `effort_applied: false`; missing or mismatched aliases are typed blockers. Auth is the Reasonix CLI's responsibility. See `skills/deepseek-bridge/SKILL.md` for the full invocation contract.
 	   - **Claude wrapper dispatch gate (v0.13.2):** When the current orchestrator is Codex and a Claude-side role is required, use `bin/code4me-claude-wrapper-run` only if the user explicitly asked for Claude/local-Claude involvement, or cross-vendor pairing selected `anthropic` and no native Claude subagent Task tool is available. Pre-flight is `command -v claude-p`. Missing `claude-p` degrades that role to the current orchestrator vendor unless the user explicitly required Claude; then surface `BLOCKED` with `blocker_type: claude_wrapper_not_installed`. Do not use provider API environment variables for this path; the wrapper is for local Claude Code login state.
-7. **Dispatch**: use the Task tool to invoke each chosen subagent, passing the dispatch contract (below) and an explicit `model` parameter. Persist artifacts and state to `.code4me/` between calls. Full dispatch protocol in `references/playbook.md`. **Update the per-AC state** in the tracker every time a task affecting that AC completes a dispatch — state transitions: `declared` → `in_progress` (any touching task dispatched) → `in_review` (all touching tasks have returned, gates running) → `done` (verification confirms PASS) / `blocked` (verification PARTIAL/FAIL, rework pending).
+7. **Dispatch**: use the Task tool to invoke each chosen subagent, passing the dispatch contract (below) with explicit `model` and `effort` decisions. Model profile and effort are independent; changing effort must not silently change model or vendor. Persist artifacts and state to `.code4me/` between calls. Full dispatch protocol in `references/playbook.md`. **Update the per-AC state** in the tracker every time a task affecting that AC completes a dispatch — state transitions: `declared` → `in_progress` (any touching task dispatched) → `in_review` (all touching tasks have returned, gates running) → `done` (verification confirms PASS) / `blocked` (verification PARTIAL/FAIL, rework pending).
 8. **Route INSIGHT and escalations**: when a subagent returns an INSIGHT, forward to the relevant upstream role and log to the per-milestone Insight Register. For impact-tier `required` INSIGHTs, also write a durable Basic Memory note when its MCP tools are available so the learning crosses milestones (see `references/insight.md`). When a circuit-breaker condition is hit (`references/circuit-breakers.md`), escalate to the user.
 9. **Confirm and close**: present the outcome to the user for sign-off. For Conversation Mode, also schedule the promote-or-revert prompt. If multiple state transitions happened this session (≥3 dispatches, or any auto-escalation, or any circuit-breaker fire), suggest the user invoke `/code4me-housekeeping` to write a handoff manifest before they `/clear` or close the session. See `references/housekeeping.md` for the audit checklist + manifest schema.
 
@@ -136,9 +136,11 @@ Every dispatch must include:
 - relevant Context Pack content (weight-appropriate, not the full superset)
 - explicit completion expectations
 - pointers to artifacts the subagent needs to read
-- explicit `vendor` (`anthropic` | `openai`) — defaults to `anthropic`; set by `references/cross-vendor-policy.md` resolution when cross-vendor pairing is enabled for the milestone
+- explicit `vendor` (`anthropic` | `openai` | `deepseek`) — defaults to `anthropic`; set by `references/cross-vendor-policy.md` resolution when cross-vendor pairing is enabled for the milestone
 - explicit `model_tier` (`low` | `mid` | `high`) — resolved from `references/model-selection.yaml` defaults
 - explicit `model` parameter — resolved from `references/vendor-models.yaml[vendor][tier]`; never inherited
+- explicit `effort` (`low` | `medium` | `high`; `xhigh` / `max` only as an explicit backend-supported deviation) — resolved independently from the model
+- `default_effort`, `effort_deviated_from_default`, `effort_source`, and `effort_applied`; legacy callers without effort use the tier fallback recorded as `effort_source: legacy_tier_fallback`
 - the `vendor_pairing` block (`policy`, `pair_role`, `alternates_with`, `degraded`) when cross-vendor pairing is enabled — see `references/cross-vendor-policy.md`
 - a one-line tooling reminder (Basic Memory, codegraph, CocoIndex, configured MCPs, and context-mode order — see `references/tooling.md`)
 - the available MCP inventory for this project, with one-line preference notes
@@ -175,9 +177,13 @@ Append one JSONL line to `.code4me/dispatch-log.jsonl` for every Task-tool dispa
 {
   "ts": "<ISO8601>",
   "milestone": "<id>", "task": "<id>", "weight": "<weight>",
-  "subagent": "<name>", "vendor": "anthropic|openai",
+  "subagent": "<name>", "vendor": "anthropic|openai|deepseek",
   "model_tier": "low|mid|high", "default_tier": "<tier>",
   "tier_deviated_from_default": <bool>, "model": "<concrete id>",
+  "effort": "low|medium|high|xhigh|max", "default_effort": "<effort>",
+  "effort_deviated_from_default": <bool>,
+  "effort_source": "default|explicit_deviation|legacy_tier_fallback",
+  "effort_applied": <bool>,
   "mode": "<mode or null>", "outcome": "<outcome>",
   "escalation_trigger": "<symptom class or null>",
   "vendor_pairing": {"policy": "...", "pair_role": "...", "alternates_with": "...", "degraded": "..."},
@@ -185,7 +191,7 @@ Append one JSONL line to `.code4me/dispatch-log.jsonl` for every Task-tool dispa
 }
 ```
 
-Field provenance: the v0.6 base fields, `model_tier` / `default_tier` / `tier_deviated_from_default` / `vendor_pairing` added in v0.7, and `context_provenance` added in v0.8 per `references/context-queries-schema.md` §Resolution provenance. This append-only log is the audit trail for tier-deviation patterns, cross-vendor cost rollups, pairing degradations, and Context Pack assembly correctness. It is local to the project — not part of the plugin distribution.
+Field provenance: the v0.6 base fields, `model_tier` / `default_tier` / `tier_deviated_from_default` / `vendor_pairing` added in v0.7, `context_provenance` added in v0.8, and independent effort fields added in v0.14. This append-only log remains backward-compatible with older entries. It is local to the project — not part of the plugin distribution.
 
 Persist durable decisions and reusable lessons to Basic Memory when its MCP tools are available. Local workflow artifacts remain under `.code4me/`.
 
@@ -220,13 +226,14 @@ Read the relevant reference file at decision time. Do not reconstruct rules from
 
 ## Slash commands
 
-The plugin ships twelve slash commands under `commands/`. Users can either type natural-language requests (which trigger the orchestrator via the `code4me` skill description) or invoke commands explicitly. Both paths produce the same downstream behaviour. The ten code4me commands are listed below; the two `audit4me-*` commands (`/audit4me-config`, `/audit4me-status`) belong to the audit4me surface — see `skills/audit4me/SKILL.md`.
+The plugin ships fourteen slash commands under `commands/`. Users can either type natural-language requests (which trigger the orchestrator via the `code4me` skill description) or invoke commands explicitly. Both paths produce the same downstream behaviour. The eleven code4me commands are listed below; the three `audit4me-*` commands belong to the audit4me surface — see `skills/audit4me/SKILL.md`.
 
 - `/code4me-classify <task>` — intake + classification, no dispatch (read-only)
 - `/code4me-dispatch <weight> [--cross-vendor] [--solo] <task>` — explicit weight, skip intake; auto-escalation still applies; `--solo` (v0.13+) runs the task solo per `references/solo-mode.md` (Conversation/Light/Standard only)
 - `/code4me-status [milestone_id]` — read-only snapshot of `.code4me/`
 - `/code4me-init` — scaffold a new project (`CLAUDE.md`, `.mcp.json`, `.claude/settings.json`, `.code4me/`); never overwrites
 - `/code4me-probe-run [subdir | path]` — runs `bin/code4me-probe-run` for LLM-as-judge probe evaluation
+- `/code4me-improve --held-out-manifest PATH [probe scope]` — supervised outer loop: frozen baseline, isolated held-out evaluation, one approved candidate change, identical rerun, explicit keep/revert
 - `/code4me-audit [path]` — wraps `bin/code4me-audit-dispatch-log`
 - `/code4me-promote-or-revert <task_id>` — closes the Conversation Mode loop (always interactive)
 - `/code4me-preflight [--critical] [--quiet]` (v0.9+) — runs `bin/code4me-preflight` to validate the environment is dispatch-ready (`.code4me/` directory, hooks installed, structural indexes, optional bridge CLIs, jq available); `--critical` enables extra checks (allowlist populated, hook scripts on disk). The orchestrator's playbook recommends running this before Critical-mode dispatches.

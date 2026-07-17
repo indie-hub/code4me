@@ -131,11 +131,12 @@ RETURN SCHEMA:
 ## Invocation
 
 ```
-timeout 360 codex exec --model {resolved_model} --prompt-file /tmp/codex-ver-{task_id}.txt \
+codex exec --model {resolved_model} -c 'model_reasoning_effort="{resolved_effort}"' - \
+  < /tmp/codex-ver-{task_id}.txt \
   > /tmp/codex-ver-{task_id}.out 2> /tmp/codex-ver-{task_id}.err
 ```
 
-360s for `suite-run` (includes Codex running the test suite — raise to 600s if your suite is slow). 240s sufficient for `ac-coverage`. Exit codes: standard mapping.
+Use a 360s host tool/process timeout for `suite-run` (600s for slow suites); 240s for `ac-coverage`. Do not depend on GNU `timeout`.
 
 ## Validation
 

@@ -36,7 +36,7 @@ chmod +x "$FAKE"
 printf 'Act as code4me verifier.\nReturn JSON only.\n' > "$PROMPT"
 
 echo "== helper calls fake claude-p =="
-OUT="$(CLAUDE_P_BIN="$FAKE" CLAUDE_P_ARGS_FILE="$ARGS" bash "$SCRIPT" --prompt-file "$PROMPT" --cwd "$WORK" --timeout-sec 7 --model sonnet --session-id s1 2>&1)"
+OUT="$(CLAUDE_P_BIN="$FAKE" CLAUDE_P_ARGS_FILE="$ARGS" bash "$SCRIPT" --prompt-file "$PROMPT" --cwd "$WORK" --timeout-sec 7 --model sonnet --effort high --session-id s1 2>&1)"
 RC=$?
 [ "$RC" -eq 0 ] && ok "helper exits 0" || bad "helper exits $RC"
 printf '%s' "$OUT" | jq -e '.answer == "CLAUDE_WRAPPER_OK"' >/dev/null 2>&1 && ok "helper returns JSON" || bad "helper returns JSON"
@@ -49,6 +49,8 @@ contains "passes cwd" "$ARGS_TEXT" "--cwd"
 contains "passes cwd value" "$ARGS_TEXT" "$WORK"
 contains "passes model" "$ARGS_TEXT" "--model"
 contains "passes model value" "$ARGS_TEXT" "sonnet"
+contains "passes effort" "$ARGS_TEXT" "--effort"
+contains "passes effort value" "$ARGS_TEXT" "high"
 contains "passes session id" "$ARGS_TEXT" "--session-id"
 contains "passes session value" "$ARGS_TEXT" "s1"
 contains "passes prompt content" "$ARGS_TEXT" "Act as code4me verifier."
@@ -58,6 +60,12 @@ OUT="$(CLAUDE_P_BIN="$WORK/missing" bash "$SCRIPT" --dry-run --prompt "hello" --
 RC=$?
 [ "$RC" -eq 0 ] && ok "dry-run exits 0 without binary" || bad "dry-run exits $RC"
 contains "dry-run shows command" "$OUT" "DRY-RUN:"
+
+echo "== invalid effort is rejected =="
+OUT="$(bash "$SCRIPT" --dry-run --prompt "hello" --cwd "$WORK" --effort extreme 2>&1)"
+RC=$?
+[ "$RC" -eq 2 ] && ok "invalid effort exits 2" || bad "invalid effort exits $RC"
+contains "invalid effort explains values" "$OUT" "low, medium, high, xhigh, max"
 
 echo ""
 printf 'PASS: %d   FAIL: %d\n' "$PASS" "$FAIL"
