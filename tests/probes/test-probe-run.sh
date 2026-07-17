@@ -13,6 +13,16 @@ FAIL=0
 ok()  { PASS=$((PASS+1)); printf '  ok   %s\n' "$1"; }
 bad() { FAIL=$((FAIL+1)); printf '  FAIL %s\n' "$1"; }
 
+bad_with_log() {
+    local label="$1" log="$2"
+    bad "$label"
+    if [ -r "$log" ]; then
+        printf '%s\n' "--- captured log: $log ---" >&2
+        cat "$log" >&2
+        printf '%s\n' '--- end captured log ---' >&2
+    fi
+}
+
 expect_contains() {
     local label="$1" file="$2" text="$3"
     if grep -Fq "$text" "$file"; then ok "$label"; else bad "$label"; fi
@@ -43,6 +53,18 @@ verdict=${FAKE_VERDICT:-'{"outcome":"pass","coverage":{"expected":"complete","pa
 jq -cn --arg text "$verdict" '{content:[{text:$text}]}'
 EOF
 chmod +x "$WORK/bin/curl"
+cat > "$WORK/bin/cygpath" <<'EOF'
+#!/usr/bin/env bash
+set -u
+if [ "${1:-}" != "-u" ] || [ "$#" -ne 2 ]; then
+    exit 2
+fi
+case "$2" in
+    C:/held-out/model-routing.md) printf '%s\n' "$CYGPATH_PROBE_PATH" ;;
+    *) printf '%s\n' "$2" ;;
+esac
+EOF
+chmod +x "$WORK/bin/cygpath"
 
 run_probe() {
     local capture="$1" output="$2" probe="$3" verdict="${4:-}"
@@ -164,7 +186,7 @@ fi
 output_target="$WORK/evidence/output-target.jsonl"
 output_link="$WORK/evidence/output-link.jsonl"
 printf 'target-sentinel\n' > "$output_target"
-if ln -s "$output_target" "$output_link" 2>/dev/null; then
+if ln -s "$output_target" "$output_link" 2>/dev/null && [ -L "$output_link" ]; then
     if run_probe "$WORK/output-link-request.json" "$output_link" \
         "$ROOT/probes/model-routing/01-adaptive-model-effort.md"; then
         bad "--output rejects symbolic link"
@@ -174,6 +196,7 @@ if ln -s "$output_target" "$output_link" 2>/dev/null; then
         bad "--output rejects symbolic link without following it"
     fi
 else
+    rm -rf "$output_link"
     ok "--output symlink test skipped: platform disallows symlinks"
 fi
 
@@ -182,7 +205,7 @@ held_out_probe="$WORK/held-out/model-routing.md"
 cp "$ROOT/probes/model-routing/01-adaptive-model-effort.md" "$held_out_probe"
 held_out_hash=$(sha256_file "$held_out_probe")
 manifest="$WORK/held-out-manifest.json"
-jq -n --arg path "$held_out_probe" --arg hash "$held_out_hash" \
+MSYS2_ARG_CONV_EXCL='*' jq -n --arg path "$held_out_probe" --arg hash "$held_out_hash" \
     '{schema_version: 1, probes: [{path: $path, sha256: $hash}]}' > "$manifest"
 
 if printf 'candidate response\nEOF\n' | \
@@ -192,56 +215,83 @@ if printf 'candidate response\nEOF\n' | \
     > "$WORK/held-out.log" 2>&1; then
     ok "verified external manifest runs through existing runner"
 else
-    bad "verified external manifest runs through existing runner"
+    bad_with_log "verified external manifest runs through existing runner" \
+        "$WORK/held-out.log"
 fi
 
+drive_manifest="$WORK/drive-held-out-manifest.json"
+export CYGPATH_PROBE_PATH="$held_out_probe"
+MSYS2_ARG_CONV_EXCL='*' jq -n --arg path 'C:/held-out/model-routing.md' \
+    --arg hash "$held_out_hash" \
+    '{schema_version: 1, probes: [{path: $path, sha256: $hash}]}' \
+    > "$drive_manifest"
+if printf 'candidate response\nEOF\n' | \
+    PATH="$WORK/bin:$PATH" CAPTURE_FILE="$WORK/drive-held-out-request.json" \
+    ANTHROPIC_API_KEY=test-key bash "$RUNNER" --no-budget \
+    --manifest "$drive_manifest" --output "$WORK/evidence/drive-held-out.jsonl" \
+    > "$WORK/drive-held-out.log" 2>&1; then
+    ok "drive-letter manifest probe path normalizes through cygpath"
+else
+    bad_with_log "drive-letter manifest probe path normalizes through cygpath" \
+        "$WORK/drive-held-out.log"
+fi
+unset CYGPATH_PROBE_PATH
+
 bad_manifest="$WORK/bad-manifest.json"
-jq -n --arg path "$held_out_probe" \
+MSYS2_ARG_CONV_EXCL='*' jq -n --arg path "$held_out_probe" \
     '{schema_version: 1, probes: [{path: $path, sha256: ("0" * 64)}]}' \
     > "$bad_manifest"
 if PATH="$WORK/bin:$PATH" CAPTURE_FILE="$WORK/should-not-exist.json" \
     ANTHROPIC_API_KEY=test-key bash "$RUNNER" --no-budget \
     --manifest "$bad_manifest" --output "$WORK/evidence/bad.jsonl" \
     </dev/null > "$WORK/bad-manifest.log" 2>&1; then
-    bad "hash mismatch blocks held-out run"
+    bad_with_log "hash mismatch blocks held-out run" "$WORK/bad-manifest.log"
 elif [ -e "$WORK/evidence/bad.jsonl" ]; then
-    bad "hash mismatch blocks before output creation"
+    bad_with_log "hash mismatch blocks before output creation" \
+        "$WORK/bad-manifest.log"
 else
     ok "hash mismatch blocks before output creation"
 fi
 
 manifest_link="$WORK/manifest-link.json"
 if ln -s "$ROOT/skills/code4me/schemas/held-out-manifest.schema.json" \
-    "$manifest_link" 2>/dev/null; then
+    "$manifest_link" 2>/dev/null && [ -L "$manifest_link" ]; then
     if PATH="$WORK/bin:$PATH" CAPTURE_FILE="$WORK/manifest-link-request.json" \
         ANTHROPIC_API_KEY=test-key bash "$RUNNER" --no-budget \
         --manifest "$manifest_link" --output "$WORK/evidence/manifest-link.jsonl" \
         </dev/null > "$WORK/manifest-link.log" 2>&1; then
-        bad "final manifest symlink is rejected"
+        bad_with_log "final manifest symlink is rejected" \
+            "$WORK/manifest-link.log"
     elif grep -Fq 'manifest must not be a symbolic link' "$WORK/manifest-link.log"; then
         ok "final manifest symlink is rejected"
     else
-        bad "final manifest symlink is rejected"
+        bad_with_log "final manifest symlink is rejected" \
+            "$WORK/manifest-link.log"
     fi
 else
+    rm -rf "$manifest_link"
     ok "manifest symlink test skipped: platform disallows symlinks"
 fi
 
 worktree_parent_link="$WORK/worktree-parent"
-if ln -s "$ROOT" "$worktree_parent_link" 2>/dev/null; then
+if ln -s "$ROOT" "$worktree_parent_link" 2>/dev/null && \
+    [ -L "$worktree_parent_link" ]; then
     through_parent_link="$worktree_parent_link/skills/code4me/schemas/held-out-manifest.schema.json"
     if PATH="$WORK/bin:$PATH" CAPTURE_FILE="$WORK/parent-link-request.json" \
         ANTHROPIC_API_KEY=test-key bash "$RUNNER" --no-budget \
         --manifest "$through_parent_link" --output "$WORK/evidence/parent-link.jsonl" \
         </dev/null > "$WORK/parent-link.log" 2>&1; then
-        bad "manifest parent symlink cannot bypass worktree isolation"
+        bad_with_log "manifest parent symlink cannot bypass worktree isolation" \
+            "$WORK/parent-link.log"
     elif grep -Fq 'manifest must live outside the candidate worktree' \
         "$WORK/parent-link.log"; then
         ok "manifest parent symlink cannot bypass worktree isolation"
     else
-        bad "manifest parent symlink cannot bypass worktree isolation"
+        bad_with_log "manifest parent symlink cannot bypass worktree isolation" \
+            "$WORK/parent-link.log"
     fi
 else
+    rm -rf "$worktree_parent_link"
     ok "manifest parent symlink test skipped: platform disallows symlinks"
 fi
 

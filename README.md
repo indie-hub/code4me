@@ -2,7 +2,7 @@
 
 **A multi-agent SDLC orchestrator for Claude Code and Codex.** Turn a one-line user request into a structured workflow: a lead architect designs, a challenger architect critiques, a spec-to-test engineer authors the test gate, a developer implements, and a quality-gate loop (verification + code review + QA) attests the work — all dispatched as agent roles, with optional cross-vendor pairing through OpenAI's Codex CLI or DeepSeek's Reasonix CLI for dialectic.
 
-**Status:** `0.14.0-dev` — adaptive model/effort routing and supervised improve mode are in development.
+**Status:** `0.14.1-dev` — adaptive model/effort routing and supervised improve mode are in development.
 
 ## What it does, concretely
 
@@ -164,7 +164,7 @@ The docs follow a [Diataxis](https://diataxis.fr/) split:
 
 The [CHANGELOG](CHANGELOG.md) carries the version-by-version history with rationale per cut. Headline arc:
 
-- **v0.14** — current Anthropic/OpenAI/DeepSeek mappings, independent model and effort routing, project-overrideable Reasonix aliases, full-contract probe judging, and supervised `/code4me-improve` experiments with executable external held-out evaluation.
+- **v0.14.1** — current Anthropic/OpenAI/DeepSeek mappings, independent model and effort routing, project-overrideable Reasonix aliases, full-contract probe judging, and supervised `/code4me-improve` experiments with executable external held-out evaluation.
 - **v0.13.2** — Codex plugin manifest, Codex-as-orchestrator guidance, dependency checker/installer (`bin/code4me-install-deps`), Basic Memory replacing OpenWolf/buglog, CocoIndex support, `claude-p` subprocess helper/docs/preflight, optional Codex hooks template, and structural-first ordering so context-mode stays behind codegraph/CocoIndex.
 - **v0.13.1** — audit4me Phase 1, self-locating project installer, session-wiring detector, Windows path-normalization tests, and legacy LSP made opt-in.
 - **v0.13** — solo execution mode, structural-index-first source lookup, codegraph integration, and public-release portability work.
