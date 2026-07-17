@@ -2,7 +2,7 @@
 
 **A multi-agent SDLC orchestrator for Claude Code and Codex.** Turn a one-line user request into a structured workflow: a lead architect designs, a challenger architect critiques, a spec-to-test engineer authors the test gate, a developer implements, and a quality-gate loop (verification + code review + QA) attests the work — all dispatched as agent roles, with optional cross-vendor pairing through OpenAI's Codex CLI or DeepSeek's Reasonix CLI for dialectic.
 
-**Status:** `0.14.2-dev` — adaptive model/effort routing and supervised improve mode are in development.
+**Status:** `0.15.0-dev` — supervised improvement supports explicit Anthropic API, Claude subscription, Codex, and Reasonix judge backends.
 
 ## What it does, concretely
 
@@ -152,7 +152,7 @@ The docs follow a [Diataxis](https://diataxis.fr/) split:
 | `/code4me-status [milestone_id]` | Read-only snapshot of `.code4me/` |
 | `/code4me-promote-or-revert <task_id>` | Close the Conversation Mode loop |
 | `/code4me-probe-run [subdir\|path]` | Programmatic probe runner with regression budget |
-| `/code4me-improve --held-out-manifest PATH [subdir\|path]` | Supervised baseline/candidate experiment with isolated held-out evaluation and explicit keep/revert |
+| `/code4me-improve --held-out-manifest PATH [--judge-backend=NAME] [--judge-provider=NAME] [scope]` | Supervised experiment with a frozen Anthropic API, `claude-p`, Codex, or Reasonix judge identity and explicit keep/revert |
 | `/code4me-audit [path]` | Dispatch-log analytics |
 | `/code4me-trello-init` | One-time Trello board scaffold |
 | `/code4me-housekeeping` | Session-boundary checkpoint (audit + handoff manifest for safe resume) |
@@ -164,6 +164,7 @@ The docs follow a [Diataxis](https://diataxis.fr/) split:
 
 The [CHANGELOG](CHANGELOG.md) carries the version-by-version history with rationale per cut. Headline arc:
 
+- **v0.15.0** — isolated multi-vendor probe judges (`anthropic-api`, `claude-p`, `codex`, `reasonix`) with frozen backend/provider/model/effort metadata and no billing-changing fallback.
 - **v0.14.1** — current Anthropic/OpenAI/DeepSeek mappings, independent model and effort routing, project-overrideable Reasonix aliases, full-contract probe judging, and supervised `/code4me-improve` experiments with executable external held-out evaluation.
 - **v0.13.2** — Codex plugin manifest, Codex-as-orchestrator guidance, dependency checker/installer (`bin/code4me-install-deps`), Basic Memory replacing OpenWolf/buglog, CocoIndex support, `claude-p` subprocess helper/docs/preflight, optional Codex hooks template, and structural-first ordering so context-mode stays behind codegraph/CocoIndex.
 - **v0.13.1** — audit4me Phase 1, self-locating project installer, session-wiring detector, Windows path-normalization tests, and legacy LSP made opt-in.

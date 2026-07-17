@@ -9,8 +9,8 @@ candidate change to Code4Me's skills, prompts, routing, hooks, or probe harness.
 - Work from a clean temporary Git worktree at the caller repository's exact
   `HEAD`. Never edit the caller's worktree.
 - Freeze an immutable manifest before baseline evaluation: baseline commit,
-  probe scope, each probe hash, judge model, judge configuration, runner hash,
-  and held-out probe identifiers/hashes.
+  probe scope, each probe hash, judge backend, provider, model, effort, runner
+  hash, and held-out probe identifiers/hashes.
 - Run the baseline before proposing a change.
 - Present exactly one measurable hypothesis and one bounded candidate change.
 - Require explicit user approval before any candidate edit or commit.
@@ -82,27 +82,32 @@ Set absolute controller-owned paths before candidate dispatch:
 baseline_commit=$(git rev-parse HEAD)
 git worktree add --detach "$candidate_dir" "$baseline_commit"
 public_scope=${public_scope:-.}
+judge_backend=${judge_backend:-anthropic-api}
+judge_model=${judge_model:?resolve and freeze the backend model before baseline}
+judge_args=(--judge-backend="$judge_backend" --judge-model="$judge_model")
+[ -z "${judge_provider:-}" ] || judge_args+=(--judge-provider="$judge_provider")
+[ -z "${judge_effort:-}" ] || judge_args+=(--judge-effort="$judge_effort")
 
 bash "$candidate_dir/bin/code4me-probe-run" \
-  --judge-model="$judge_model" --no-budget \
+  "${judge_args[@]}" --no-budget \
   --output "$evidence_dir/public-baseline.jsonl" "$public_scope"
 bash "$candidate_dir/bin/code4me-probe-run" \
-  --judge-model="$judge_model" --no-budget \
+  "${judge_args[@]}" --no-budget \
   --manifest "$held_out_manifest" \
   --output "$evidence_dir/held-out-baseline.jsonl"
 ```
 
-Freeze the baseline commit, public scope and hashes, runner hash, judge model
-and configuration, held-out manifest hash, and held-out probe hashes in the
-external control manifest. After explicit approval, the one candidate change,
-and the candidate commit, verify those hashes and run:
+Freeze the baseline commit, public scope and hashes, runner hash, resolved judge
+backend/provider/model/effort, held-out manifest hash, and held-out probe hashes
+in the external control manifest. After explicit approval, the one candidate
+change, and the candidate commit, verify those hashes and run:
 
 ```bash
 bash "$candidate_dir/bin/code4me-probe-run" \
-  --judge-model="$judge_model" --no-budget \
+  "${judge_args[@]}" --no-budget \
   --output "$evidence_dir/public-candidate.jsonl" "$public_scope"
 bash "$candidate_dir/bin/code4me-probe-run" \
-  --judge-model="$judge_model" --no-budget \
+  "${judge_args[@]}" --no-budget \
   --manifest "$held_out_manifest" \
   --output "$evidence_dir/held-out-candidate.jsonl"
 ```
@@ -110,6 +115,21 @@ bash "$candidate_dir/bin/code4me-probe-run" \
 The four commands, inputs, and judge configuration are fixed before baseline.
 `--output` prevents result files from dirtying the candidate worktree. A failed
 hash check blocks evaluation; it does not authorize a retry or manifest update.
+
+## Judge backends
+
+`anthropic-api` remains the default and uses `ANTHROPIC_API_KEY`. `claude-p`
+uses the interactive Claude subscription wrapper, `codex` uses the signed-in
+Codex CLI, and `reasonix` uses its configured DeepSeek provider. The runner
+never falls back between them. `--judge-effort` is supported by `claude-p` and
+`codex`; Anthropic API and Reasonix reject it rather than silently ignoring it.
+
+Backend defaults are `claude-sonnet-5` for Anthropic API and `claude-p`, and
+`gpt-5.6-terra` for Codex. Reasonix defaults to provider `deepseek-pro` mapped
+to concrete model `deepseek-v4-pro`; `reasonix doctor --json` must confirm that
+identity. Improve mode resolves these defaults before baseline and then passes
+the exact backend/provider/model/effort combination to all four evaluation
+commands.
 
 ## Terminal decisions
 

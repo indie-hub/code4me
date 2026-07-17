@@ -53,6 +53,56 @@ verdict=${FAKE_VERDICT:-'{"outcome":"pass","coverage":{"expected":"complete","pa
 jq -cn --arg text "$verdict" '{content:[{text:$text}]}'
 EOF
 chmod +x "$WORK/bin/curl"
+cat > "$WORK/bin/claude-p" <<'EOF'
+#!/usr/bin/env bash
+set -u
+printf '%s\n' "$@" > "$CAPTURE_FILE"
+cwd=""
+tools="__unset__"
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --cwd) shift; cwd="$1" ;;
+        --tools) shift; tools="$1" ;;
+    esac
+    shift
+done
+entries=$(find "$cwd" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')
+printf 'cwd=%s\ntools=%s\nentries=%s\n' "$cwd" "$tools" "$entries" > "$CAPTURE_STATE_FILE"
+jq -cn --arg result "$FAKE_VERDICT" '{type:"result", result:$result}'
+EOF
+chmod +x "$WORK/bin/claude-p"
+cat > "$WORK/bin/codex" <<'EOF'
+#!/usr/bin/env bash
+set -u
+entries=$(find "$PWD" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')
+printf 'cwd=%s\nentries=%s\n' "$PWD" "$entries" > "$CAPTURE_STATE_FILE"
+printf '%s\n' "$@" > "$CAPTURE_FILE"
+cat > "$CAPTURE_PROMPT_FILE"
+printf '%s\n' "$FAKE_VERDICT"
+EOF
+chmod +x "$WORK/bin/codex"
+cat > "$WORK/bin/reasonix" <<'EOF'
+#!/usr/bin/env bash
+set -u
+if [ "${1:-}" = "doctor" ]; then
+    printf '%s\n' '{"providers":[{"name":"deepseek-pro","model":"deepseek-v4-pro"},{"name":"custom-provider","model":"custom-model"}]}'
+    exit 0
+fi
+printf '%s\n' "$@" > "$CAPTURE_FILE"
+dir=""
+while [ "$#" -gt 0 ]; do
+    if [ "$1" = "-dir" ]; then shift; dir="$1"; break; fi
+    shift
+done
+entries=$(find "$dir" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')
+printf 'dir=%s\nentries=%s\n' "$dir" "$entries" > "$CAPTURE_STATE_FILE"
+if [ "${REASONIX_RAW:-0}" = "1" ]; then
+    printf '%s\n' "$FAKE_VERDICT"
+else
+    printf 'Reasonix result follows.\n```json\n%s\n```\n' "$FAKE_VERDICT"
+fi
+EOF
+chmod +x "$WORK/bin/reasonix"
 cat > "$WORK/bin/cygpath" <<'EOF'
 #!/usr/bin/env bash
 set -u
@@ -107,6 +157,147 @@ expect_contains "improve Expected included" "$WORK/improve-prompt.txt" \
     'creates a clean temporary worktree from exact `HEAD`'
 expect_contains "improve Pass criterion included" "$WORK/improve-prompt.txt" \
     "No candidate edit occurs before explicit approval"
+
+printf '== judge backends ==\n'
+valid_verdict=$(jq -c 'del(.probe, .judge)' "$model_output")
+
+claude_output="$WORK/evidence/claude-p.jsonl"
+if printf 'candidate response\nEOF\n' | \
+    PATH="$WORK/bin:$PATH" CAPTURE_FILE="$WORK/claude-p.args" \
+    CAPTURE_STATE_FILE="$WORK/claude-p.state" \
+    FAKE_VERDICT="$valid_verdict" bash "$RUNNER" --no-budget \
+    --judge-backend=claude-p --judge-effort=high \
+    --output "$claude_output" "$ROOT/probes/model-routing/01-adaptive-model-effort.md" \
+    > "$WORK/claude-p.log" 2>&1; then
+    ok "claude-p judge completes"
+else
+    bad_with_log "claude-p judge completes" "$WORK/claude-p.log"
+fi
+if jq -e '.judge == {backend:"claude-p", provider:null, model:"claude-sonnet-5", effort:"high"}' \
+    "$claude_output" >/dev/null && \
+    grep -Fxq -- '--model' "$WORK/claude-p.args" && \
+    grep -Fxq -- '--effort' "$WORK/claude-p.args" && \
+    grep -Fxq 'tools=' "$WORK/claude-p.state" && \
+    grep -Fxq 'entries=0' "$WORK/claude-p.state"; then
+    ok "claude-p isolated cwd, empty tools, defaults, and metadata"
+else
+    bad "claude-p isolated cwd, empty tools, defaults, and metadata"
+fi
+
+codex_output="$WORK/evidence/codex.jsonl"
+if printf 'candidate response\nEOF\n' | \
+    PATH="$WORK/bin:$PATH" CAPTURE_FILE="$WORK/codex.args" \
+    CAPTURE_PROMPT_FILE="$WORK/codex.prompt" CAPTURE_STATE_FILE="$WORK/codex.state" \
+    FAKE_VERDICT="$valid_verdict" \
+    bash "$RUNNER" --no-budget --judge-backend=codex --judge-effort=xhigh \
+    --output "$codex_output" "$ROOT/probes/model-routing/01-adaptive-model-effort.md" \
+    > "$WORK/codex.log" 2>&1; then
+    ok "codex judge completes"
+else
+    bad_with_log "codex judge completes" "$WORK/codex.log"
+fi
+if jq -e '.judge == {backend:"codex", provider:null, model:"gpt-5.6-terra", effort:"xhigh"}' \
+    "$codex_output" >/dev/null && \
+    grep -Fxq 'model_reasoning_effort="xhigh"' "$WORK/codex.args" && \
+    grep -Fxq -- '--sandbox' "$WORK/codex.args" && \
+    grep -Fxq 'read-only' "$WORK/codex.args" && \
+    grep -Fxq -- '--skip-git-repo-check' "$WORK/codex.args" && \
+    grep -Fxq 'entries=0' "$WORK/codex.state" && \
+    grep -Fq 'Return a single JSON object' "$WORK/codex.prompt"; then
+    ok "codex isolated read-only stdin, defaults, and metadata"
+else
+    bad "codex isolated read-only stdin, defaults, and metadata"
+fi
+
+reasonix_output="$WORK/evidence/reasonix.jsonl"
+if printf 'candidate response\nEOF\n' | \
+    PATH="$WORK/bin:$PATH" CAPTURE_FILE="$WORK/reasonix.args" \
+    CAPTURE_STATE_FILE="$WORK/reasonix.state" FAKE_VERDICT="$valid_verdict" \
+    bash "$RUNNER" --no-budget \
+    --judge-backend=reasonix --output "$reasonix_output" \
+    "$ROOT/probes/model-routing/01-adaptive-model-effort.md" \
+    > "$WORK/reasonix.log" 2>&1; then
+    ok "reasonix fenced judge output completes"
+else
+    bad_with_log "reasonix fenced judge output completes" "$WORK/reasonix.log"
+fi
+if jq -e '.judge == {backend:"reasonix", provider:"deepseek-pro", model:"deepseek-v4-pro", effort:null}' \
+    "$reasonix_output" >/dev/null && \
+    grep -Fxq -- '-dir' "$WORK/reasonix.args" && \
+    grep -Fxq 'deepseek-pro' "$WORK/reasonix.args" && \
+    grep -Fxq 'entries=0' "$WORK/reasonix.state"; then
+    ok "reasonix isolated fenced output, provider identity, and metadata"
+else
+    bad "reasonix isolated fenced output, provider identity, and metadata"
+fi
+
+reasonix_raw_output="$WORK/evidence/reasonix-raw.jsonl"
+if printf 'candidate response\nEOF\n' | \
+    PATH="$WORK/bin:$PATH" CAPTURE_FILE="$WORK/reasonix-raw.args" \
+    CAPTURE_STATE_FILE="$WORK/reasonix-raw.state" REASONIX_RAW=1 \
+    FAKE_VERDICT="$valid_verdict" bash "$RUNNER" --no-budget \
+    --judge-backend=reasonix --output "$reasonix_raw_output" \
+    "$ROOT/probes/model-routing/01-adaptive-model-effort.md" \
+    > "$WORK/reasonix-raw.log" 2>&1 && \
+    jq -e '.outcome == "pass"' "$reasonix_raw_output" >/dev/null; then
+    ok "reasonix raw JSON judge output completes"
+else
+    bad_with_log "reasonix raw JSON judge output completes" "$WORK/reasonix-raw.log"
+fi
+
+if PATH="$WORK/bin:$PATH" bash "$RUNNER" --no-budget \
+    --judge-backend=reasonix --judge-provider=deepseek-pro --judge-model=wrong-model \
+    --output "$WORK/evidence/reasonix-mismatch.jsonl" \
+    "$ROOT/probes/model-routing/01-adaptive-model-effort.md" \
+    </dev/null > "$WORK/reasonix-mismatch.log" 2>&1; then
+    bad "reasonix provider/model mismatch is rejected"
+elif grep -Fq 'reasonix provider deepseek-pro must resolve to model wrong-model' \
+    "$WORK/reasonix-mismatch.log"; then
+    ok "reasonix provider/model mismatch is rejected"
+else
+    bad_with_log "reasonix provider/model mismatch is rejected" "$WORK/reasonix-mismatch.log"
+fi
+
+if PATH="$WORK/bin:$PATH" bash "$RUNNER" --no-budget \
+    --judge-backend=codex --judge-provider=deepseek-pro \
+    --output "$WORK/evidence/codex-provider.jsonl" \
+    "$ROOT/probes/model-routing/01-adaptive-model-effort.md" \
+    </dev/null > "$WORK/codex-provider.log" 2>&1; then
+    bad "judge provider is rejected outside reasonix"
+elif grep -Fq -- '--judge-provider is supported only by reasonix' \
+    "$WORK/codex-provider.log"; then
+    ok "judge provider is rejected outside reasonix"
+else
+    bad_with_log "judge provider is rejected outside reasonix" "$WORK/codex-provider.log"
+fi
+
+rm -f "$WORK/claude-p-fallback.args"
+if PATH="$WORK/bin:$PATH" CODE4ME_CODEX_BIN=missing-codex \
+    CAPTURE_FILE="$WORK/claude-p-fallback.args" ANTHROPIC_API_KEY=test-key \
+    bash "$RUNNER" --no-budget --judge-backend=codex \
+    --output "$WORK/evidence/no-fallback.jsonl" \
+    "$ROOT/probes/model-routing/01-adaptive-model-effort.md" \
+    </dev/null > "$WORK/no-fallback.log" 2>&1; then
+    bad "missing codex fails without fallback"
+elif grep -Fq 'codex is required for judge backend codex' "$WORK/no-fallback.log" && \
+    [ ! -e "$WORK/claude-p-fallback.args" ]; then
+    ok "missing codex fails without fallback"
+else
+    bad_with_log "missing codex fails without fallback" "$WORK/no-fallback.log"
+fi
+
+if PATH="$WORK/bin:$PATH" bash "$RUNNER" --no-budget \
+    --judge-backend=reasonix --judge-effort=high \
+    --output "$WORK/evidence/reasonix-effort.jsonl" \
+    "$ROOT/probes/model-routing/01-adaptive-model-effort.md" \
+    </dev/null > "$WORK/reasonix-effort.log" 2>&1; then
+    bad "unsupported reasonix effort is rejected"
+elif grep -Fq -- '--judge-effort is not supported by reasonix' \
+    "$WORK/reasonix-effort.log"; then
+    ok "unsupported reasonix effort is rejected"
+else
+    bad_with_log "unsupported reasonix effort is rejected" "$WORK/reasonix-effort.log"
+fi
 
 printf '== adversarial judge verdicts ==\n'
 judge_fields='"kind":{"result":"not_applicable","reason":"not specified"},"weight":{"result":"not_applicable","reason":"not specified"},"team":{"result":"not_applicable","reason":"not specified"},"summary":"claimed outcome"'

@@ -4,7 +4,18 @@ All notable changes to this plugin will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.14.2-dev] — in progress
+## [0.15.0-dev] — in progress
+
+### Added
+
+- Multi-vendor LLM-as-judge backends for probes and `/code4me-improve`: Anthropic API, subscription-backed `claude-p`, signed-in Codex CLI, and Reasonix. Backend selection is explicit, results record the resolved backend/provider/model/effort, and missing backends fail without fallback.
+
+### Changed
+
+- CLI judges run isolated from the project: `claude-p` receives no tools and an empty cwd, Codex uses an empty read-only sandbox, and Reasonix uses an empty `-dir`. Reasonix provider aliases are verified against their concrete model through `reasonix doctor --json`.
+- Improve experiments now freeze and reuse the judge backend, provider, model, and supported effort across public/held-out baseline and candidate runs.
+
+## [0.14.2-dev]
 
 ### Fixed
 

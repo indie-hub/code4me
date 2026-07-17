@@ -27,11 +27,15 @@
 #   --update-baseline       After running, promote current results to baseline.
 #                           Skipped if any probe errored.
 #   --no-budget             Skip the flip check entirely.
-#   --judge-model=MODEL     LLM-as-judge model (default: claude-sonnet-5).
+#   --judge-backend=NAME    anthropic-api (default), claude-p, codex, or reasonix.
+#   --judge-provider=NAME   Reasonix provider alias (default: deepseek-pro).
+#   --judge-model=MODEL     Override the selected backend's default judge model.
+#   --judge-effort=LEVEL    Optional for claude-p and codex only.
 #
 # Required:
-#   - ANTHROPIC_API_KEY  (for the LLM-as-judge call)
-#   - jq, curl
+#   - jq
+#   - The selected backend and its authentication (curl + ANTHROPIC_API_KEY,
+#     claude-p, codex, or reasonix).
 #
 # Output:
 #   probes/results-{YYYY-MM-DDTHHMMSS}.jsonl  (one line per probe)
@@ -43,26 +47,13 @@ set -u
 tmp_prompt=""
 current_map=""
 baseline_map=""
-trap 'rm -f "$tmp_prompt" "$current_map" "$baseline_map"' EXIT INT TERM
+judge_cwd=""
+trap 'rm -f "$tmp_prompt" "$current_map" "$baseline_map"; [ -z "$judge_cwd" ] || rm -rf "$judge_cwd"' EXIT INT TERM
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PLUGIN_ROOT="$( cd "${SCRIPT_DIR}/.." && pwd )"
 PROBES_DIR="${PLUGIN_ROOT}/probes"
 BUDGET_FILE="${PROBES_DIR}/budget.toml"
-
-# ---- pre-flight ----
-
-for cmd in jq curl; do
-    if ! command -v "$cmd" >/dev/null 2>&1; then
-        printf 'error: %s is required but not on PATH\n' "$cmd" >&2
-        exit 1
-    fi
-done
-
-if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
-    printf 'error: ANTHROPIC_API_KEY is required for the LLM-as-judge call\n' >&2
-    exit 1
-fi
 
 # ---- budget.toml parsing ----
 #
@@ -92,7 +83,12 @@ case "$BUDGET_BASELINE" in
     *) BUDGET_BASELINE="${PLUGIN_ROOT}/${BUDGET_BASELINE}" ;;
 esac
 
-JUDGE_MODEL="${CODE4ME_JUDGE_MODEL:-claude-sonnet-5}"
+JUDGE_BACKEND="${CODE4ME_JUDGE_BACKEND:-anthropic-api}"
+JUDGE_PROVIDER="${CODE4ME_JUDGE_PROVIDER:-}"
+JUDGE_MODEL="${CODE4ME_JUDGE_MODEL:-}"
+JUDGE_EFFORT="${CODE4ME_JUDGE_EFFORT:-}"
+CODEX_BIN="${CODE4ME_CODEX_BIN:-codex}"
+REASONIX_BIN="${CODE4ME_REASONIX_BIN:-reasonix}"
 DO_BUDGET=1
 DO_UPDATE_BASELINE=0
 MAX_FLIPS="$BUDGET_MAX_FLIPS"
@@ -137,8 +133,14 @@ while [ "$#" -gt 0 ]; do
             DO_UPDATE_BASELINE=1 ;;
         --no-budget)
             DO_BUDGET=0 ;;
+        --judge-backend=*)
+            JUDGE_BACKEND="${arg#--judge-backend=}" ;;
+        --judge-provider=*)
+            JUDGE_PROVIDER="${arg#--judge-provider=}" ;;
         --judge-model=*)
             JUDGE_MODEL="${arg#--judge-model=}" ;;
+        --judge-effort=*)
+            JUDGE_EFFORT="${arg#--judge-effort=}" ;;
         --help|-h)
             sed -n '/^# /p' "$0" | sed 's/^# //; s/^#//' | head -40
             exit 0 ;;
@@ -146,6 +148,84 @@ while [ "$#" -gt 0 ]; do
             probe_args+=("$arg") ;;
     esac
 done
+
+# ---- pre-flight ----
+
+if ! command -v jq >/dev/null 2>&1; then
+    printf 'error: jq is required but not on PATH\n' >&2
+    exit 1
+fi
+
+if [ -n "$JUDGE_PROVIDER" ] && [ "$JUDGE_BACKEND" != "reasonix" ]; then
+    printf 'error: --judge-provider is supported only by reasonix\n' >&2
+    exit 1
+fi
+
+case "$JUDGE_BACKEND" in
+    anthropic-api)
+        [ -n "$JUDGE_MODEL" ] || JUDGE_MODEL="claude-sonnet-5"
+        if [ -n "$JUDGE_EFFORT" ]; then
+            printf 'error: --judge-effort is not supported by anthropic-api\n' >&2
+            exit 1
+        fi
+        if ! command -v curl >/dev/null 2>&1; then
+            printf 'error: curl is required for judge backend anthropic-api\n' >&2
+            exit 1
+        fi
+        if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            printf 'error: ANTHROPIC_API_KEY is required for judge backend anthropic-api\n' >&2
+            exit 1
+        fi ;;
+    claude-p)
+        [ -n "$JUDGE_MODEL" ] || JUDGE_MODEL="claude-sonnet-5"
+        case "$JUDGE_EFFORT" in
+            ''|low|medium|high|xhigh|max) ;;
+            *) printf 'error: invalid claude-p judge effort: %s\n' "$JUDGE_EFFORT" >&2; exit 1 ;;
+        esac
+        if ! command -v "${CLAUDE_P_BIN:-claude-p}" >/dev/null 2>&1; then
+            printf 'error: claude-p is required for judge backend claude-p\n' >&2
+            exit 1
+        fi
+        judge_cwd=$(mktemp -d) || exit 1 ;;
+    codex)
+        [ -n "$JUDGE_MODEL" ] || JUDGE_MODEL="gpt-5.6-terra"
+        case "$JUDGE_EFFORT" in
+            ''|low|medium|high|xhigh|max) ;;
+            *) printf 'error: invalid codex judge effort: %s\n' "$JUDGE_EFFORT" >&2; exit 1 ;;
+        esac
+        if ! command -v "$CODEX_BIN" >/dev/null 2>&1; then
+            printf 'error: codex is required for judge backend codex\n' >&2
+            exit 1
+        fi
+        judge_cwd=$(mktemp -d) || exit 1 ;;
+    reasonix)
+        [ -n "$JUDGE_PROVIDER" ] || JUDGE_PROVIDER="deepseek-pro"
+        [ -n "$JUDGE_MODEL" ] || JUDGE_MODEL="deepseek-v4-pro"
+        if [ -n "$JUDGE_EFFORT" ]; then
+            printf 'error: --judge-effort is not supported by reasonix\n' >&2
+            exit 1
+        fi
+        if ! command -v "$REASONIX_BIN" >/dev/null 2>&1; then
+            printf 'error: reasonix is required for judge backend reasonix\n' >&2
+            exit 1
+        fi
+        doctor_json=$("$REASONIX_BIN" doctor --json 2>/dev/null) || {
+            printf 'error: reasonix doctor failed for judge backend reasonix\n' >&2
+            exit 1
+        }
+        if ! printf '%s' "$doctor_json" | jq -e \
+            --arg provider "$JUDGE_PROVIDER" --arg model "$JUDGE_MODEL" \
+            'any(.providers[]?; .name == $provider and .model == $model)' \
+            >/dev/null 2>&1; then
+            printf 'error: reasonix provider %s must resolve to model %s\n' \
+                "$JUDGE_PROVIDER" "$JUDGE_MODEL" >&2
+            exit 1
+        fi
+        judge_cwd=$(mktemp -d) || exit 1 ;;
+    *)
+        printf 'error: --judge-backend must be one of: anthropic-api, claude-p, codex, reasonix\n' >&2
+        exit 1 ;;
+esac
 
 is_absolute_path() {
     case "$1" in
@@ -406,20 +486,65 @@ EOF
 
 call_judge() {
     local prompt_file="$1"
-    local body
-    body=$(jq -n \
+    local body raw
+    case "$JUDGE_BACKEND" in
+        anthropic-api)
+            body=$(jq -n \
+                --arg model "$JUDGE_MODEL" \
+                --rawfile prompt "$prompt_file" \
+                '{model: $model, max_tokens: 2048, messages: [{role: "user", content: $prompt}]}')
+            raw=$(curl -sS https://api.anthropic.com/v1/messages \
+                -H "x-api-key: ${ANTHROPIC_API_KEY}" \
+                -H "anthropic-version: 2023-06-01" \
+                -H "content-type: application/json" \
+                -d "$body") || return
+            printf '%s' "$raw" | jq -r '.content[0].text // empty' ;;
+        claude-p)
+            cmd=(bash "$SCRIPT_DIR/code4me-claude-wrapper-run" --prompt-file "$prompt_file" \
+                --cwd "$judge_cwd" --tools '' --model "$JUDGE_MODEL")
+            [ -n "$JUDGE_EFFORT" ] && cmd+=(--effort "$JUDGE_EFFORT")
+            raw=$("${cmd[@]}") || return
+            printf '%s' "$raw" | jq -r '.result // empty' ;;
+        codex)
+            cmd=("$CODEX_BIN" exec --model "$JUDGE_MODEL" --sandbox read-only --skip-git-repo-check)
+            [ -n "$JUDGE_EFFORT" ] && cmd+=(-c "model_reasoning_effort=\"${JUDGE_EFFORT}\"")
+            cmd+=(-)
+            (cd "$judge_cwd" && "${cmd[@]}" < "$prompt_file") ;;
+        reasonix)
+            "$REASONIX_BIN" run -dir "$judge_cwd" --model "$JUDGE_PROVIDER" \
+                "$(cat "$prompt_file")" ;;
+    esac
+}
+
+normalize_judge_text() {
+    if [ "$JUDGE_BACKEND" != "reasonix" ]; then
+        cat
+        return
+    fi
+    local raw
+    raw=$(cat)
+    if printf '%s' "$raw" | jq -e . >/dev/null 2>&1; then
+        printf '%s' "$raw"
+        return
+    fi
+    printf '%s' "$raw" | awk '
+        /^```json[[:space:]]*$/ { in_json=1; block=""; found=1; next }
+        /^```[[:space:]]*$/ && in_json { last=block; in_json=0; next }
+        in_json { block=block $0 "\n" }
+        END { if (found) printf "%s", last }
+    '
+}
+
+record_result() {
+    local result="$1"
+    jq -cn \
+        --argjson result "$result" \
+        --arg backend "$JUDGE_BACKEND" \
+        --arg provider "$JUDGE_PROVIDER" \
         --arg model "$JUDGE_MODEL" \
-        --rawfile prompt "$prompt_file" \
-        '{
-            model: $model,
-            max_tokens: 2048,
-            messages: [{role: "user", content: $prompt}]
-        }')
-    curl -sS https://api.anthropic.com/v1/messages \
-        -H "x-api-key: ${ANTHROPIC_API_KEY}" \
-        -H "anthropic-version: 2023-06-01" \
-        -H "content-type: application/json" \
-        -d "$body"
+        --arg effort "$JUDGE_EFFORT" \
+        '$result + {judge: {backend: $backend, provider: (if $provider == "" then null else $provider end), model: $model, effort: (if $effort == "" then null else $effort end)}}' \
+        >> "$results_file"
 }
 
 validate_judge_verdict() {
@@ -518,7 +643,12 @@ total="${#probes[@]}"
 
 printf '\ncode4me-probe-run — %d probe(s) queued\n' "$total"
 printf 'Results: %s\n' "$results_file"
+printf 'Judge backend: %s\n' "$JUDGE_BACKEND"
+if [ -n "$JUDGE_PROVIDER" ]; then
+    printf 'Judge provider: %s\n' "$JUDGE_PROVIDER"
+fi
 printf 'Judge model: %s\n' "$JUDGE_MODEL"
+printf 'Judge effort: %s\n' "${JUDGE_EFFORT:-default}"
 if [ "$DO_BUDGET" -eq 1 ]; then
     printf 'Budget: max_flips=%s; baseline=%s\n' "$MAX_FLIPS" "$BASELINE_PATH"
 fi
@@ -537,7 +667,7 @@ for i in "${!probes[@]}"; do
 
     if [ -z "$input" ] || [ -z "$expected" ] || [ -z "$pass_criterion" ]; then
         printf 'SKIP: probe missing Input prompt, Expected, or Pass criterion section\n' >&2
-        printf '{"probe":"%s","outcome":"skip","reason":"missing input, expected, or pass criterion"}\n' "$rel" >> "$results_file"
+        record_result "$(jq -cn --arg probe "$rel" '{probe: $probe, outcome: "skip", reason: "missing input, expected, or pass criterion"}')"
         error_count=$((error_count+1))
         continue
     fi
@@ -559,7 +689,7 @@ for i in "${!probes[@]}"; do
     done
 
     if [ "$response" = "__SKIP__" ]; then
-        printf '{"probe":"%s","outcome":"skip","reason":"user skipped"}\n' "$rel" >> "$results_file"
+        record_result "$(jq -cn --arg probe "$rel" '{probe: $probe, outcome: "skip", reason: "user skipped"}')"
         error_count=$((error_count+1))
         continue
     fi
@@ -567,15 +697,17 @@ for i in "${!probes[@]}"; do
     tmp_prompt=$(mktemp)
     build_judge_prompt "$rel" "$input" "$expected" "$pass_criterion" "$response" > "$tmp_prompt"
 
-    raw=$(call_judge "$tmp_prompt")
+    if ! raw=$(call_judge "$tmp_prompt"); then
+        raw=""
+    fi
     rm -f "$tmp_prompt"
 
-    judge_text=$(printf '%s' "$raw" | jq -r '.content[0].text // empty' 2>/dev/null)
+    judge_text=$(printf '%s' "$raw" | normalize_judge_text)
 
     if [ -z "$judge_text" ]; then
         printf 'ERROR: judge call failed or returned no content\n' >&2
         printf '%s\n' "$raw" | head -200 >&2
-        printf '{"probe":"%s","outcome":"error","reason":"judge call failed"}\n' "$rel" >> "$results_file"
+        record_result "$(jq -cn --arg probe "$rel" '{probe: $probe, outcome: "error", reason: "judge call failed"}')"
         error_count=$((error_count+1))
         continue
     fi
@@ -584,16 +716,14 @@ for i in "${!probes[@]}"; do
     if [ -z "$verdict" ]; then
         printf 'ERROR: judge response was not valid JSON\n' >&2
         printf '%s\n' "$judge_text" | head -50 >&2
-        printf '{"probe":"%s","outcome":"error","reason":"judge response invalid JSON","raw":%s}\n' \
-            "$rel" "$(printf '%s' "$judge_text" | jq -Rs .)" >> "$results_file"
+        record_result "$(jq -cn --arg probe "$rel" --arg raw "$judge_text" '{probe: $probe, outcome: "error", reason: "judge response invalid JSON", raw: $raw}')"
         error_count=$((error_count+1))
         continue
     fi
 
     if ! printf '%s' "$verdict" | validate_judge_verdict; then
         printf 'ERROR: judge response did not match the verdict schema\n' >&2
-        printf '{"probe":"%s","outcome":"error","reason":"judge response schema invalid","raw":%s}\n' \
-            "$rel" "$verdict" >> "$results_file"
+        record_result "$(jq -cn --arg probe "$rel" --argjson raw "$verdict" '{probe: $probe, outcome: "error", reason: "judge response schema invalid", raw: $raw}')"
         error_count=$((error_count+1))
         continue
     fi
@@ -603,8 +733,7 @@ for i in "${!probes[@]}"; do
 
     if ! printf '%s' "$verdict" | validate_judge_consistency; then
         printf 'ERROR: judge outcome contradicts its criteria\n' >&2
-        printf '{"probe":"%s","outcome":"error","reason":"judge outcome inconsistent with criteria","raw":%s}\n' \
-            "$rel" "$verdict" >> "$results_file"
+        record_result "$(jq -cn --arg probe "$rel" --argjson raw "$verdict" '{probe: $probe, outcome: "error", reason: "judge outcome inconsistent with criteria", raw: $raw}')"
         error_count=$((error_count+1))
         continue
     fi
@@ -618,10 +747,7 @@ for i in "${!probes[@]}"; do
 
     printf '\nVERDICT: %s — %s\n' "$outcome" "$summary"
 
-    jq -n \
-        --arg probe "$rel" \
-        --argjson verdict "$verdict" \
-        '{probe: $probe} + $verdict' >> "$results_file"
+    record_result "$(jq -cn --arg probe "$rel" --argjson verdict "$verdict" '{probe: $probe} + $verdict')"
 done
 
 # ---- summary ----

@@ -36,7 +36,7 @@ chmod +x "$FAKE"
 printf 'Act as code4me verifier.\nReturn JSON only.\n' > "$PROMPT"
 
 echo "== helper calls fake claude-p =="
-OUT="$(CLAUDE_P_BIN="$FAKE" CLAUDE_P_ARGS_FILE="$ARGS" bash "$SCRIPT" --prompt-file "$PROMPT" --cwd "$WORK" --timeout-sec 7 --model sonnet --effort high --session-id s1 2>&1)"
+OUT="$(CLAUDE_P_BIN="$FAKE" CLAUDE_P_ARGS_FILE="$ARGS" bash "$SCRIPT" --prompt-file "$PROMPT" --cwd "$WORK" --timeout-sec 7 --model sonnet --effort high --tools '' --session-id s1 2>&1)"
 RC=$?
 [ "$RC" -eq 0 ] && ok "helper exits 0" || bad "helper exits $RC"
 printf '%s' "$OUT" | jq -e '.answer == "CLAUDE_WRAPPER_OK"' >/dev/null 2>&1 && ok "helper returns JSON" || bad "helper returns JSON"
@@ -51,6 +51,12 @@ contains "passes model" "$ARGS_TEXT" "--model"
 contains "passes model value" "$ARGS_TEXT" "sonnet"
 contains "passes effort" "$ARGS_TEXT" "--effort"
 contains "passes effort value" "$ARGS_TEXT" "high"
+contains "passes tools" "$ARGS_TEXT" "--tools"
+if awk 'previous == "--tools" && $0 == "" { found=1 } { previous=$0 } END { exit !found }' "$ARGS"; then
+    ok "passes empty tools value"
+else
+    bad "passes empty tools value"
+fi
 contains "passes session id" "$ARGS_TEXT" "--session-id"
 contains "passes session value" "$ARGS_TEXT" "s1"
 contains "passes prompt content" "$ARGS_TEXT" "Act as code4me verifier."

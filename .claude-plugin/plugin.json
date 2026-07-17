@@ -1,6 +1,6 @@
 {
   "name": "code4me",
-  "version": "0.14.2-dev",
+  "version": "0.15.0-dev",
   "description": "Multi-agent SDLC framework with workflow weights, specialist dispatch, quality gates, independent model and reasoning-effort routing, opt-in Anthropic/OpenAI/DeepSeek bridges, and supervised probe-driven improvement mode.",
   "author": {
     "name": "Bruno"

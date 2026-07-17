@@ -2,7 +2,7 @@
 # code4me-claude-wrapper-run -- bounded claude-p subprocess helper for Codex.
 #
 # Usage:
-#   bin/code4me-claude-wrapper-run --prompt-file prompt.md [--cwd DIR] [--effort LEVEL]
+#   bin/code4me-claude-wrapper-run --prompt-file prompt.md [--cwd DIR] [--effort LEVEL] [--tools VALUE]
 #   bin/code4me-claude-wrapper-run --prompt "role prompt" [--cwd DIR]
 #   bin/code4me-claude-wrapper-run --dry-run --prompt "role prompt"
 
@@ -13,6 +13,8 @@ TIMEOUT_SEC=300
 CWD="$PWD"
 MODEL=""
 EFFORT=""
+TOOLS=""
+TOOLS_SET=0
 SESSION_ID=""
 RAW_LOG=""
 PROMPT=""
@@ -59,6 +61,12 @@ while [ "$#" -gt 0 ]; do
         --effort)
             need_value "$@"
             EFFORT="$2"
+            shift
+            ;;
+        --tools)
+            need_value "$@"
+            TOOLS="$2"
+            TOOLS_SET=1
             shift
             ;;
         --session-id)
@@ -114,6 +122,7 @@ fi
 cmd=( "$CLAUDE_P_BIN" --output-format json --timeout-sec "$TIMEOUT_SEC" --cwd "$CWD" )
 [ -n "$MODEL" ] && cmd+=( --model "$MODEL" )
 [ -n "$EFFORT" ] && cmd+=( --effort "$EFFORT" )
+[ "$TOOLS_SET" -eq 1 ] && cmd+=( --tools "$TOOLS" )
 [ -n "$SESSION_ID" ] && cmd+=( --session-id "$SESSION_ID" )
 [ -n "$RAW_LOG" ] && cmd+=( --raw-log "$RAW_LOG" )
 cmd+=( "$PROMPT" )
