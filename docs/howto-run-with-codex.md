@@ -16,7 +16,10 @@ Expose this checkout as a Codex plugin so Codex can read `.codex-plugin/plugin.j
 bash bin/code4me-install-deps --install core
 bash bin/code4me-install-deps --install memory
 bash bin/code4me-install-deps --install indexes
+bash bin/code4me-install-deps --configure-mcp codex
 ```
+
+The configuration step registers Basic Memory and CocoIndex, delegates codegraph registration to `codegraph install`, and installs context-mode through the Codex plugin marketplace when no conflicting manual entry exists. Follow the checklist printed at the end, then restart Codex.
 
 Start Codex in the target project and ask it to use code4me for the milestone:
 

@@ -353,16 +353,14 @@ fi
 # context-mode is useful for derived analysis and large non-source outputs, but
 # it should not be the first stop for source-code lookup when codegraph or
 # CocoIndex can answer.
-CONTEXT_MODE_DIR="$HOME/.claude/plugins/context-mode"
-if [ -d "$CONTEXT_MODE_DIR" ]; then
-    if [ -r "$CONTEXT_MODE_DIR/.claude-plugin/plugin.json" ]; then
-        CM_VERSION=$(jq -r '.version // "unknown"' "$CONTEXT_MODE_DIR/.claude-plugin/plugin.json" 2>/dev/null || echo "unparseable")
-        record "context-mode plugin (optional)" ok "installed at $CONTEXT_MODE_DIR (version $CM_VERSION); keep it behind codegraph/CocoIndex for source-code lookup"
-    else
-        record "context-mode plugin (optional)" warn "$CONTEXT_MODE_DIR/ exists but no .claude-plugin/plugin.json — plugin may be partially installed or corrupted" 0
-    fi
+if command -v context-mode >/dev/null 2>&1; then
+    record "context-mode plugin (optional)" ok "context-mode CLI on PATH; keep it behind codegraph/CocoIndex for source-code lookup"
+elif [ -d "$HOME/.claude/plugins/cache/context-mode" ]; then
+    record "context-mode plugin (optional)" ok "Claude context-mode plugin cache found; keep it behind codegraph/CocoIndex for source-code lookup"
+elif [ -d "$HOME/.codex/plugins/cache/context-mode" ] || { [ -r "$HOME/.codex/config.toml" ] && grep -q 'context-mode' "$HOME/.codex/config.toml" 2>/dev/null; }; then
+    record "context-mode plugin (optional)" ok "Codex context-mode configuration found; keep it behind codegraph/CocoIndex for source-code lookup"
 else
-    record "context-mode plugin (optional)" warn "not installed at $CONTEXT_MODE_DIR — optional. Use it for derived analysis/logs/docs; codegraph/CocoIndex are preferred for source-code lookup" 0
+    record "context-mode plugin (optional)" warn "not detected — optional. Configure with code4me-install-deps --configure-mcp codex|claude|all; use it behind codegraph/CocoIndex for source-code lookup" 0
 fi
 
 # ---- Critical-mode extra checks ----

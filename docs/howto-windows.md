@@ -61,6 +61,14 @@ From Git Bash or WSL, start with:
 bash bin/code4me-install-deps --check
 ```
 
+After installing the optional memory/index tools, register their MCPs for the clients you use:
+
+```bash
+bash bin/code4me-install-deps --configure-mcp codex   # or claude / all
+```
+
+The command preserves existing registrations and ends with the remaining restart, trust, and per-project indexing steps.
+
 Use `--install <group>` only when you want the script to run package-manager commands for a group.
 
 The hooks need `jq`. The optional integrations may need additional CLIs.

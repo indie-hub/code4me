@@ -5,6 +5,7 @@
 #   bin/code4me-install-deps --check
 #   bin/code4me-install-deps --dry-run --install all
 #   bin/code4me-install-deps --install core|memory|indexes|agents|claude-wrapper|all
+#   bin/code4me-install-deps --configure-mcp codex|claude|all
 #
 # Default is --check. Installs are explicit and limited to package-manager
 # commands shown before execution.
@@ -16,6 +17,9 @@ INSTALL_MEMORY=0
 INSTALL_INDEXES=0
 INSTALL_AGENTS=0
 INSTALL_CLAUDE_WRAPPER=0
+CONFIGURE_CODEX=0
+CONFIGURE_CLAUDE=0
+USER_ACTIONS=""
 
 die() { printf 'code4me-install-deps: %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
@@ -55,6 +59,20 @@ select_group() {
     esac
 }
 
+select_mcp_target() {
+    case "$1" in
+        codex) CONFIGURE_CODEX=1 ;;
+        claude) CONFIGURE_CLAUDE=1 ;;
+        all) CONFIGURE_CODEX=1; CONFIGURE_CLAUDE=1 ;;
+        *) die "unknown MCP target: $1 (expected codex, claude, or all)" ;;
+    esac
+}
+
+user_action() {
+    case "$USER_ACTIONS" in *"$1"*) return 0 ;; esac
+    USER_ACTIONS="${USER_ACTIONS}  [ ] $1\n"
+}
+
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --check) ;;
@@ -62,6 +80,11 @@ while [ "$#" -gt 0 ]; do
         --install)
             [ "$#" -ge 2 ] || die "--install requires a group"
             select_group "$2"
+            shift
+            ;;
+        --configure-mcp)
+            [ "$#" -ge 2 ] || die "--configure-mcp requires codex, claude, or all"
+            select_mcp_target "$2"
             shift
             ;;
         --help|-h)
@@ -76,7 +99,10 @@ done
 run_cmd() {
     printf '  + %s\n' "$1"
     [ "$DRY_RUN" -eq 1 ] && return 0
-    sh -c "$1"
+    if ! sh -c "$1"; then
+        user_action "Retry failed command: $1"
+        return 1
+    fi
 }
 
 missing_hint() {
@@ -184,6 +210,112 @@ install_claude_wrapper() {
     fi
 }
 
+mcp_exists() {
+    local client="$1" name="$2"
+    case "$client" in
+        codex) codex mcp get "$name" >/dev/null 2>&1 ;;
+        claude) claude mcp get "$name" >/dev/null 2>&1 ;;
+    esac
+}
+
+configure_stdio_mcp() {
+    local client="$1" name="$2" command="$3"
+    if mcp_exists "$client" "$name"; then
+        printf '  ok  %s MCP already configured in %s\n' "$name" "$client"
+        return 0
+    fi
+    case "$client" in
+        codex) run_cmd "codex mcp add $name -- $command" ;;
+        claude) run_cmd "claude mcp add --scope user $name -- $command" ;;
+    esac
+}
+
+context_plugin_exists() {
+    local client="$1"
+    "$client" plugin list --json 2>/dev/null | grep -q 'context-mode@context-mode'
+}
+
+context_marketplace_exists() {
+    local client="$1"
+    "$client" plugin marketplace list --json 2>/dev/null | grep -q 'mksglu/context-mode\|"name"[[:space:]]*:[[:space:]]*"context-mode"'
+}
+
+node_supports_context_mode() {
+    local version major minor
+    version="$(node -p 'process.versions.node' 2>/dev/null)" || return 1
+    major=${version%%.*}
+    minor=${version#*.}; minor=${minor%%.*}
+    [ "$major" -gt 22 ] 2>/dev/null || { [ "$major" -eq 22 ] 2>/dev/null && [ "$minor" -ge 5 ] 2>/dev/null; }
+}
+
+configure_context_plugin() {
+    local client="$1"
+    if context_plugin_exists "$client"; then
+        printf '  ok  context-mode plugin already installed in %s\n' "$client"
+        return 0
+    fi
+    if mcp_exists "$client" context-mode; then
+        user_action "$client already has a manual context-mode MCP entry. Keep it, or remove it before installing the context-mode plugin with hooks."
+        return 0
+    fi
+    if ! have node || ! node_supports_context_mode; then
+        user_action "Install Node.js 22.5+ before installing context-mode for $client."
+        return 0
+    fi
+    if ! context_marketplace_exists "$client"; then
+        run_cmd "$client plugin marketplace add mksglu/context-mode"
+    fi
+    case "$client" in
+        codex) run_cmd "codex plugin add context-mode@context-mode" ;;
+        claude) run_cmd "claude plugin install --scope user context-mode@context-mode" ;;
+    esac
+}
+
+configure_client() {
+    local client="$1" memory_command=""
+    if ! have "$client"; then
+        user_action "Install the $client CLI, then rerun with --configure-mcp $client."
+        return 0
+    fi
+
+    printf '\nConfiguring %s integrations:\n' "$client"
+    if have uvx; then
+        memory_command="uvx basic-memory mcp"
+    elif have basic-memory; then
+        memory_command="basic-memory mcp"
+    else
+        user_action "Install Basic Memory, then rerun with --configure-mcp $client."
+    fi
+    [ -n "$memory_command" ] && configure_stdio_mcp "$client" basic-memory "$memory_command"
+
+    if have ccc; then
+        if mcp_exists "$client" ccc || mcp_exists "$client" cocoindex-code; then
+            printf '  ok  CocoIndex MCP already configured in %s\n' "$client"
+        else
+            configure_stdio_mcp "$client" cocoindex-code "ccc mcp"
+        fi
+    else
+        user_action "Install CocoIndex Code, then rerun with --configure-mcp $client."
+    fi
+
+    configure_context_plugin "$client"
+}
+
+print_checklist() {
+    printf '\nUser checklist:\n'
+    if [ "$CONFIGURE_CODEX$CONFIGURE_CLAUDE" = "00" ]; then
+        user_action "Configure integrations with: bin/code4me-install-deps --configure-mcp codex|claude|all"
+    fi
+    [ "$CONFIGURE_CODEX" -eq 1 ] && user_action "Restart Codex. If context-mode was installed, enable hooks + plugin_hooks and trust its hook commands."
+    [ "$CONFIGURE_CLAUDE" -eq 1 ] && user_action "Restart Claude Code or run /reload-plugins after plugin changes."
+    if [ "$CONFIGURE_CODEX$CONFIGURE_CLAUDE" != "00" ]; then
+        { have codegraph || [ "$DRY_RUN" -eq 1 ]; } && user_action "Run 'codegraph init -i' once in each project that should be indexed."
+        { have ccc || [ "$DRY_RUN" -eq 1 ]; } && user_action "Run 'ccc index' once in each project that should be indexed."
+    fi
+    user_action "Run bin/code4me-preflight in the target project."
+    printf '%b' "$USER_ACTIONS"
+}
+
 printf 'code4me dependency check\n'
 printf 'platform: %s%s\n\n' "$PLATFORM" "$([ "$DRY_RUN" -eq 1 ] && printf ' (dry-run)')"
 
@@ -200,13 +332,17 @@ status_cmd "ccc" ccc "optional CocoIndex Code CLI"
 status_cmd "codex" codex "optional OpenAI cross-vendor bridge"
 status_cmd "reasonix" reasonix "optional DeepSeek cross-vendor bridge"
 status_cmd "claude-p" claude-p "optional local Claude wrapper for Codex orchestration"
+status_cmd "context-mode" context-mode "optional context-saving MCP/plugin"
 
-if [ "$INSTALL_CORE$INSTALL_MEMORY$INSTALL_INDEXES$INSTALL_AGENTS$INSTALL_CLAUDE_WRAPPER" = "00000" ]; then
+if [ "$INSTALL_CORE$INSTALL_MEMORY$INSTALL_INDEXES$INSTALL_AGENTS$INSTALL_CLAUDE_WRAPPER$CONFIGURE_CODEX$CONFIGURE_CLAUDE" = "0000000" ]; then
     printf '\nNo installs requested. Use --install <group> to install missing tools.\n'
+    print_checklist
     exit 0
 fi
 
-printf '\nInstalling requested groups:\n'
+if [ "$INSTALL_CORE$INSTALL_MEMORY$INSTALL_INDEXES$INSTALL_AGENTS$INSTALL_CLAUDE_WRAPPER" != "00000" ]; then
+    printf '\nInstalling requested groups:\n'
+fi
 [ "$INSTALL_CORE" -eq 1 ] && install_jq
 [ "$INSTALL_MEMORY" -eq 1 ] && install_basic_memory
 if [ "$INSTALL_INDEXES" -eq 1 ]; then
@@ -216,4 +352,22 @@ fi
 [ "$INSTALL_AGENTS" -eq 1 ] && install_agents
 [ "$INSTALL_CLAUDE_WRAPPER" -eq 1 ] && install_claude_wrapper
 
+if [ "$CONFIGURE_CODEX$CONFIGURE_CLAUDE" != "00" ] && have codegraph; then
+    CODEGRAPH_TARGETS=""
+    if [ "$CONFIGURE_CODEX" -eq 1 ] && have codex; then
+        CODEGRAPH_TARGETS="codex"
+    fi
+    if [ "$CONFIGURE_CLAUDE" -eq 1 ] && have claude; then
+        [ -n "$CODEGRAPH_TARGETS" ] && CODEGRAPH_TARGETS="$CODEGRAPH_TARGETS,"
+        CODEGRAPH_TARGETS="${CODEGRAPH_TARGETS}claude"
+    fi
+    [ -n "$CODEGRAPH_TARGETS" ] && run_cmd "codegraph install --target $CODEGRAPH_TARGETS --location global --yes"
+elif [ "$CONFIGURE_CODEX$CONFIGURE_CLAUDE" != "00" ]; then
+    user_action "Install codegraph, then rerun MCP configuration."
+fi
+
+[ "$CONFIGURE_CODEX" -eq 1 ] && configure_client codex
+[ "$CONFIGURE_CLAUDE" -eq 1 ] && configure_client claude
+
 printf '\nDone. Re-run bin/code4me-install-deps --check and bin/code4me-preflight.\n'
+print_checklist

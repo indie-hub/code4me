@@ -2,7 +2,7 @@
 
 **A multi-agent SDLC orchestrator for Claude Code and Codex.** Turn a one-line user request into a structured workflow: a lead architect designs, a challenger architect critiques, a spec-to-test engineer authors the test gate, a developer implements, and a quality-gate loop (verification + code review + QA) attests the work — all dispatched as agent roles, with optional cross-vendor pairing through OpenAI's Codex CLI or DeepSeek's Reasonix CLI for dialectic.
 
-**Status:** `0.15.1-dev` — supervised improvement supports explicit Anthropic API, Claude subscription, Codex, and Reasonix judge backends.
+**Status:** `0.15.2-dev` — supervised improvement supports explicit Anthropic API, Claude subscription, Codex, and Reasonix judge backends.
 
 ## What it does, concretely
 
@@ -56,7 +56,10 @@ Recommended Codex-side setup:
 bash bin/code4me-install-deps --install core
 bash bin/code4me-install-deps --install memory
 bash bin/code4me-install-deps --install indexes
+bash bin/code4me-install-deps --configure-mcp codex
 ```
+
+Use `--configure-mcp claude` or `--configure-mcp all` for other orchestrator setups. Configuration is idempotent: existing MCP entries are preserved. The installer closes with a checklist for restarts, context-mode hook trust, per-project indexing, and any missing prerequisites.
 
 Optional local Claude consultation backend:
 

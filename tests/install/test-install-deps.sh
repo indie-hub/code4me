@@ -36,6 +36,39 @@ RC=$?
 [ "$RC" -eq 0 ] && ok "--dry-run --install all exits 0" || bad "--dry-run --install all exits $RC"
 contains "dry-run includes wrapper install hint" "$OUT" "github:indie-hub/claude-wrapper"
 
+echo "== dry-run MCP configuration =="
+for tool in uvx ccc codegraph; do
+    printf '#!/usr/bin/env sh\nexit 0\n' > "$WORK/$tool"
+    chmod +x "$WORK/$tool"
+done
+printf '#!/usr/bin/env sh\nprintf "22.5.0\\n"\n' > "$WORK/node"
+chmod +x "$WORK/node"
+cat > "$WORK/codex" <<'EOF'
+#!/usr/bin/env sh
+case "$1 $2" in
+  "mcp get") exit 1 ;;
+  "plugin list"|"plugin marketplace") printf '{"installed":[]}\n'; exit 0 ;;
+esac
+exit 0
+EOF
+cat > "$WORK/claude" <<'EOF'
+#!/usr/bin/env sh
+case "$1 $2" in
+  "mcp get") exit 1 ;;
+  "plugin list"|"plugin marketplace") printf '[]\n'; exit 0 ;;
+esac
+exit 0
+EOF
+chmod +x "$WORK/codex" "$WORK/claude"
+OUT="$(PATH="$WORK:$PATH" "$BASH" "$SCRIPT" --dry-run --configure-mcp all 2>&1)"
+RC=$?
+[ "$RC" -eq 0 ] && ok "--configure-mcp all exits 0" || bad "--configure-mcp all exits $RC"
+contains "configures Codex Basic Memory" "$OUT" "codex mcp add basic-memory -- uvx basic-memory mcp"
+contains "configures Claude CocoIndex" "$OUT" "claude mcp add --scope user cocoindex-code -- ccc mcp"
+contains "delegates codegraph configuration" "$OUT" "codegraph install --target codex,claude --location global --yes"
+contains "installs Codex context-mode plugin" "$OUT" "codex plugin add context-mode@context-mode"
+contains "prints restart checklist" "$OUT" "Restart Codex"
+
 echo "== bad group =="
 if bash "$SCRIPT" --install nope >/dev/null 2>&1; then
     bad "unknown install group fails"

@@ -4,7 +4,13 @@ All notable changes to this plugin will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.15.1-dev] — in progress
+## [0.15.2-dev] — in progress
+
+### Added
+
+- `code4me-install-deps --configure-mcp codex|claude|all` idempotently registers Basic Memory and CocoIndex, delegates codegraph configuration to its installer, installs context-mode through each client's plugin marketplace, and prints a final user-action checklist. Preflight now recognizes current Claude and Codex context-mode installations instead of checking only the obsolete Claude directory layout.
+
+## [0.15.1-dev]
 
 ### Fixed
 

@@ -32,11 +32,18 @@ set -o pipefail
 "$C4M_REAL_JQ" "$@" | sed 's/\r$//' | sed $'s/$/\r/'
 EOF
 chmod +x "$FAKE_BIN/jq"
+printf '#!/usr/bin/env sh\nexit 0\n' > "$FAKE_BIN/context-mode"
+chmod +x "$FAKE_BIN/context-mode"
 if CLAUDE_PROJECT_DIR="$PROJECT" PATH="$FAKE_BIN:$PATH" bash "$PREFLIGHT" > "$WORK/crlf-report" 2>&1 &&
    grep -q '| Hook command paths | .* ok |' "$WORK/crlf-report"; then
     ok "CRLF jq records do not corrupt hook paths"
 else
     bad "CRLF jq records do not corrupt hook paths"
+fi
+if grep -q '| context-mode plugin (optional) | .* ok |' "$WORK/crlf-report"; then
+    ok "preflight detects context-mode on PATH"
+else
+    bad "preflight detects context-mode on PATH"
 fi
 
 echo "== carriage return inside command =="
