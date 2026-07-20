@@ -27,16 +27,14 @@ In your project root:
 
 This previews the files it would create, asks you to confirm, then copies the starter templates:
 
-- `CLAUDE.md` (project conventions — edit the placeholders later)
-- `.mcp.json` (recommended MCPs — most disabled-by-default; enable what your project needs)
-- `.claude/settings.json` (hooks pre-wired; replace `<PLUGIN_DIR>` with the actual plugin path)
+- `AGENTS.md` in Codex or `CLAUDE.md` in Claude Code (project conventions — edit the placeholders later)
 - `.code4me/` (runtime working directory: milestone-status-tracker, conversation-notes, milestone-specs, tech-specs)
 
-After confirming, edit `CLAUDE.md` to replace the `PLACEHOLDER` sections with your actual project shape — at minimum the stack one-liner and the run/build/test commands.
+After confirming, edit the created `AGENTS.md` or `CLAUDE.md` to replace the `PLACEHOLDER` sections with your actual project shape — at minimum the stack one-liner and the run/build/test commands. Init leaves hooks and MCP configuration to the installer commands shown in its final checklist.
 
 ## Step 2 — first Conversation
 
-Pick a small reversible change. The classic is a string change, a config tweak, a styling adjustment. Then say it to Claude Code:
+Pick a small reversible change. The classic is a string change, a config tweak, a styling adjustment. Then say it to the current orchestrator:
 
 > Change the homepage CTA button colour from green to blue.
 

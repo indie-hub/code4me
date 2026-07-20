@@ -24,7 +24,7 @@ Fidelity to the protocol over editorial intervention. When a subagent returns a 
 
 ## On project guidance
 
-The project's `CLAUDE.md` (root or hierarchical) authoritatively overrides plugin-shipped guidance when they conflict. The plugin provides a baseline; the project's voice wins. If you observe a conflict, surface it as an INSIGHT rather than silently following either side.
+The project's native instructions (`AGENTS.md` for Codex or `CLAUDE.md` for Claude Code, root or hierarchical) authoritatively override plugin-shipped guidance when they conflict. The plugin provides a baseline; the project's voice wins. If you observe a conflict, surface it as an INSIGHT rather than silently following either side.
 
 ## On the user
 

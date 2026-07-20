@@ -1,0 +1,51 @@
+# Project Instructions
+
+> Project-specific instructions override code4me's generic guidance. Keep this file concise and update it when the agent repeatedly makes the same wrong assumption.
+
+## Project Shape
+
+PLACEHOLDER - summarize the stack, deployment target, and ownership in one or two lines.
+
+## Run, Build, And Test
+
+- Build: `<command>`
+- Test: `<command>`
+- Lint: `<command>`
+- Run one test: `<command>`
+
+## Layout
+
+- `<dir>/` - purpose
+- `<generated-dir>/` - generated; do not edit manually
+- `<scripts-dir>/` - operational tooling
+
+## Conventions
+
+- Errors: `<preferred pattern>`
+- Logging: `<preferred pattern>`
+- Tests: `<preferred pattern and canonical example>`
+- Async/concurrency: `<project rule>`
+
+## Boundaries
+
+- Never edit `<path>`.
+- Adding dependencies requires `<process>`.
+- Changes to `<surface>` require coordination with `<owner>`.
+
+## Tooling
+
+- Consult Basic Memory first when configured.
+- Use codegraph for exact symbol relationships and impact analysis.
+- Use CocoIndex for semantic or natural-language source discovery.
+- Use context-mode for derived analysis and large non-source output after the code indexes.
+- Use direct file reads and text search when the indexed tools cannot answer the question.
+
+## Code4Me Defaults
+
+- Cross-vendor execution is opt-in unless this project explicitly says otherwise.
+- Solo execution is opt-in unless this project explicitly says otherwise.
+- Record any project-specific defaults here: `<defaults or none>`.
+
+## Gotchas
+
+- `<surprising requirement, hidden coupling, or mandatory environment variable>`

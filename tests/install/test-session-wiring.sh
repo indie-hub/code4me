@@ -29,6 +29,9 @@ echo "== nudges on missing hook path =="
 printf '{"hooks":{"PreToolUse":[{"matcher":"Read|Grep","hooks":[{"type":"command","command":"bash /gone/hooks/check-structural-first-on-source.sh"}]}]}}' > "$T/.claude/settings.json"
 nudges "$(CLAUDE_PROJECT_DIR="$T" bash "$HOOK")" "missing path -> nudge"
 
+echo "== Codex ignores Claude project wiring =="
+quiet "$(PLUGIN_ROOT="$ROOT" CLAUDE_PROJECT_DIR="$T" bash "$HOOK")" "Codex bundle does not inspect .claude/settings.json"
+
 echo "== nudges on invalid .lsp.json + never writes =="
 printf '{"hooks":{"PreToolUse":[]}}' > "$T/.claude/settings.json"
 printf '{ this is not json ' > "$T/.lsp.json"

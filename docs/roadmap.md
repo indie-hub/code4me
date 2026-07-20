@@ -103,9 +103,9 @@ The edge case where the user adds AC4 mid-milestone. Both trello-sync and the tr
 
 CHANGELOG reference: v0.12.0-dev probe-06's edge-cases section.
 
-### Vendor-side hooks (Layer B) — codex and reasonix native PreToolUse
+### Vendor-side hooks (Layer B) — Codex complete; Reasonix pending
 
-**Status:** ear-tagged
+**Status:** Codex shipped in v0.15.3-dev; Reasonix remains ear-tagged
 **Target version:** v0.14+
 **Scope:** ~6-10 hours total (codex ~3h, reasonix investigation ~half-day, reasonix wiring ~3h)
 
@@ -117,16 +117,14 @@ Verified facts about the vendor hook systems:
 
 - **Reasonix has lifecycle hooks** at `<project>/.reasonix/` (per-project) and `~/.reasonix/config.json` (global). Four events confirmed from README: `PreToolUse` (gating), `PostToolUse`, `UserPromptSubmit`, `Stop`. **Coverage unknown** — what reasonix's `PreToolUse` actually intercepts (Bash-only like codex? all tools? a specific subset?) needs verification from the bundled docs (`<install>/REASONIX.md` or `<install>/docs/`) before wiring.
 
-The build:
+Remaining work:
 
 1. **Verify reasonix `PreToolUse` coverage.** Read `REASONIX.md` and `<install>/docs/`. Confirm which tools `PreToolUse` intercepts and what `permissionDecision` values are supported. ~half day depending on doc clarity.
-2. **Build a Codex payload adapter** only if the current Claude-shaped hook payload parsing proves insufficient on real Codex `apply_patch` and MCP events. Keep existing hooks as the source of truth.
-3. **Soak `templates/project-starter/codex-hooks.json.example`** wiring the Claude parity hooks under Codex-supported matchers. Keep manual install/trust review; do not auto-wire project hooks yet.
-4. **Build reasonix-side hooks** if and only if step 1 confirms reasonix's `PreToolUse` intercepts something useful. Same shape; vendor-specific config format.
-5. **Probes**: `probes/cross-vendor/10-codex-side-hooks-fire-on-bash-violation.md`, plus reasonix-side probe if applicable.
-6. **Preflight checks**: detect whether Codex hook files are present/trusted where possible, surface as warn-level when not.
+2. **Build reasonix-side hooks** if and only if step 1 confirms reasonix's `PreToolUse` intercepts something useful. Same shape; vendor-specific config format.
+3. **Probes**: add a reasonix-side probe if applicable.
+4. **Preflight checks**: detect Reasonix hook installation/trust where possible.
 
-**Decision pending before build:** opt-in (user manually copies hooks.json.example) vs auto-wire (extend `/code4me-init` to scaffold codex hooks if codex CLI is detected). Roadmap default: opt-in (less invasive). Defer the call until v0.14 build starts.
+Codex now loads the plugin-standard `hooks/hooks.json`. Its adapter expands `apply_patch` paths and maps Claude `ask` gates to Codex `deny`, because Codex does not support `ask` for PreToolUse. `/code4me-init` does not create project hook files; the only user action is Codex's required `/hooks` trust review.
 
 **Why this is meaningfully more work than Layer C was:** Codex and Claude hook payloads are close, but parity still needs real-event testing across `apply_patch`, `Bash`, and MCP calls. Reasonix is a separate ecosystem on top of that. Layer C's helper script is vendor-agnostic; Layer B has to be vendor-specific.
 

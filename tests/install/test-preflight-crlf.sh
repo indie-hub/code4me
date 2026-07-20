@@ -34,7 +34,7 @@ EOF
 chmod +x "$FAKE_BIN/jq"
 printf '#!/usr/bin/env sh\nexit 0\n' > "$FAKE_BIN/context-mode"
 chmod +x "$FAKE_BIN/context-mode"
-if CLAUDE_PROJECT_DIR="$PROJECT" PATH="$FAKE_BIN:$PATH" bash "$PREFLIGHT" > "$WORK/crlf-report" 2>&1 &&
+if CODE4ME_CLIENT=claude CLAUDE_PROJECT_DIR="$PROJECT" PATH="$FAKE_BIN:$PATH" bash "$PREFLIGHT" > "$WORK/crlf-report" 2>&1 &&
    grep -q '| Hook command paths | .* ok |' "$WORK/crlf-report"; then
     ok "CRLF jq records do not corrupt hook paths"
 else
@@ -51,7 +51,7 @@ jq --arg command $'bash C:/stale/code4me/hooks/check-test-protection.sh\r' \
     '.hooks.PreToolUse[0].hooks[0].command = $command' \
     "$PROJECT/.claude/settings.json" > "$WORK/corrupt.json"
 mv "$WORK/corrupt.json" "$PROJECT/.claude/settings.json"
-if CLAUDE_PROJECT_DIR="$PROJECT" bash "$PREFLIGHT" > "$WORK/corrupt-report" 2>&1; then
+if CODE4ME_CLIENT=claude CLAUDE_PROJECT_DIR="$PROJECT" bash "$PREFLIGHT" > "$WORK/corrupt-report" 2>&1; then
     bad "corrupted command fails preflight"
 elif grep -q 'managed hook command ends with a carriage return' "$WORK/corrupt-report"; then
     ok "corrupted command fails with an actionable diagnosis"

@@ -47,7 +47,7 @@ command -v jq >/dev/null 2>&1 || emit_pass_through
 
 TOOL_NAME="$(printf '%s' "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null || true)"
 case "$TOOL_NAME" in
-    Read|Grep|\
+    Bash|Read|Grep|\
     mcp__plugin_context-mode_context-mode__ctx_execute|\
     mcp__plugin_context-mode_context-mode__ctx_execute_file|\
     mcp__plugin_context-mode_context-mode__ctx_batch_execute|\
@@ -125,7 +125,11 @@ else
     [ -n "$HAYSTACK" ] || emit_pass_through
 
     if printf '%s' "$HAYSTACK" | grep -E -q "(^|[^a-zA-Z0-9_])(grep|rg|ag|ack)[[:space:]]" && is_source_text "$HAYSTACK"; then
-        REASON="context-mode shell search against source files"
+        if [ "$TOOL_NAME" = "Bash" ]; then
+            REASON="shell search against source files"
+        else
+            REASON="context-mode shell search against source files"
+        fi
     fi
 
     if [ -z "$REASON" ]; then

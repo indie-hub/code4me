@@ -16,7 +16,7 @@ The Product Owner (the user) declares a workflow weight at intake. The weight tu
 
 ## Solo execution mode (v0.13+) — orthogonal to weight
 
-Solo is **not a sixth weight** — it's an execution mode that composes with Conversation, Light, and Standard (never Critical, never inferred). The weight's semantics are unchanged; the orchestrator implements inline instead of dispatching a Developer, and exactly one fresh-context gate is always dispatched (combined-reviewer, or verification for Standard). Entry is explicit only: the user says "solo", passes `--solo` on `/code4me-dispatch`, or sets a `CLAUDE.md` project default. Full rules, per-weight procedure, abort conditions, and log shape: `solo-mode.md`.
+Solo is **not a sixth weight** — it's an execution mode that composes with Conversation, Light, and Standard (never Critical, never inferred). The weight's semantics are unchanged; the orchestrator implements inline instead of dispatching a Developer, and exactly one fresh-context gate is always dispatched (combined-reviewer, or verification for Standard). Entry is explicit only: the user says "solo", passes `--solo` on `/code4me-dispatch`, or sets an `AGENTS.md`/`CLAUDE.md` project default. Full rules, per-weight procedure, abort conditions, and log shape: `solo-mode.md`.
 
 ## How the user declares
 

@@ -306,7 +306,7 @@ print_checklist() {
     if [ "$CONFIGURE_CODEX$CONFIGURE_CLAUDE" = "00" ]; then
         user_action "Configure integrations with: bin/code4me-install-deps --configure-mcp codex|claude|all"
     fi
-    [ "$CONFIGURE_CODEX" -eq 1 ] && user_action "Restart Codex. If context-mode was installed, enable hooks + plugin_hooks and trust its hook commands."
+    [ "$CONFIGURE_CODEX" -eq 1 ] && user_action "Restart Codex, run /hooks, and trust the required code4me hooks plus context-mode hooks when installed."
     [ "$CONFIGURE_CLAUDE" -eq 1 ] && user_action "Restart Claude Code or run /reload-plugins after plugin changes."
     if [ "$CONFIGURE_CODEX$CONFIGURE_CLAUDE" != "00" ]; then
         { have codegraph || [ "$DRY_RUN" -eq 1 ]; } && user_action "Run 'codegraph init -i' once in each project that should be indexed."

@@ -23,6 +23,13 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PLUGIN_ROOT="$( cd "${SCRIPT_DIR}/.." && pwd )"
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
 
+RUNTIME_CLIENT="${CODE4ME_CLIENT:-unknown}"
+if [ "$RUNTIME_CLIENT" = "unknown" ] && { [ -n "${CODEX_THREAD_ID:-}" ] || [ -n "${CODEX_CI:-}" ]; }; then
+    RUNTIME_CLIENT="codex"
+elif [ "$RUNTIME_CLIENT" = "unknown" ] && { [ -n "${CLAUDECODE:-}" ] || [ -n "${CLAUDE_CODE_ENTRYPOINT:-}" ]; }; then
+    RUNTIME_CLIENT="claude"
+fi
+
 # Flags.
 MODE_CRITICAL=0
 QUIET=0
@@ -100,9 +107,23 @@ else
     record ".code4me/ working directory" warn "missing — orchestrator will scaffold from templates/.code4me-skeleton on first dispatch, or run /code4me-init now"
 fi
 
-# ---- check 2: hooks installed in .claude/settings.json ----
+# ---- check 2: required plugin-bundled Codex hooks ----
+CODEX_HOOKS="$PLUGIN_ROOT/hooks/hooks.json"
+if [ ! -r "$CODEX_HOOKS" ] || [ ! -r "$PLUGIN_ROOT/hooks/codex-pretool-adapter.sh" ]; then
+    record "Codex hook bundle" fail "required Codex hook manifest or adapter is missing from $PLUGIN_ROOT/hooks/"
+elif command -v jq >/dev/null 2>&1 && ! jq -e '.hooks.PreToolUse and .hooks.SessionStart' "$CODEX_HOOKS" >/dev/null 2>&1; then
+    record "Codex hook bundle" fail "$CODEX_HOOKS is invalid or incomplete"
+elif ! grep -q 'codex-pretool-adapter.sh' "$CODEX_HOOKS" 2>/dev/null; then
+    record "Codex hook bundle" fail "$CODEX_HOOKS does not register the Codex payload adapter"
+else
+    record "Codex hook bundle" ok "required plugin hooks are bundled; use /hooks in Codex to confirm the current definition is trusted"
+fi
+
+# ---- check 2a: Claude hooks installed in .claude/settings.json ----
 SETTINGS="$PROJECT_DIR/.claude/settings.json"
-if [ ! -r "$SETTINGS" ]; then
+if [ "$RUNTIME_CLIENT" = "codex" ]; then
+    : # Codex uses the required plugin bundle checked above.
+elif [ ! -r "$SETTINGS" ]; then
     record "Hook installation" warn "no .claude/settings.json at project root — hooks not installed; framework still works but runtime defense-in-depth is off. See README \"Hook protections\""
 else
     HOOKS_MISSING=""
@@ -119,11 +140,11 @@ else
     fi
 fi
 
-# ---- check 2b: hook command paths actually resolve (v0.13.1+) ----
+# ---- check 2b: Claude hook command paths actually resolve (v0.13.1+) ----
 # Catches the classic failure: a hook command still says <PLUGIN_DIR>, or points
 # at a stale absolute path that no longer exists on this machine. The fix is to
 # (re)run bin/code4me-install, which self-locates the plugin and rewrites paths.
-if [ -r "$SETTINGS" ] && command -v jq >/dev/null 2>&1; then
+if [ "$RUNTIME_CLIENT" != "codex" ] && [ -r "$SETTINGS" ] && command -v jq >/dev/null 2>&1; then
     BAD_PATHS=""
     JQ_MANAGED_HOOKS='.hooks.PreToolUse[]?.hooks[]?.command // empty
         | select(test("/hooks/(check-test-protection|check-forbidden-conditions|check-critical-write-allowlist|check-lsp-first-on-source|check-structural-first-on-source)\\.sh") or test("code4me[^[:space:]\"]*/hooks/check-[^[:space:]\"]+\\.sh"))'
@@ -379,17 +400,17 @@ if [ "$MODE_CRITICAL" -eq 1 ]; then
 
     # Hook script files exist on disk
     for hook in check-test-protection check-forbidden-conditions check-critical-write-allowlist; do
-        if [ -x "$PLUGIN_ROOT/hooks/${hook}.sh" ]; then
+        if [ -r "$PLUGIN_ROOT/hooks/${hook}.sh" ]; then
             : # silently OK; aggregate below
         else
-            record "Hook script ${hook}.sh" fail "missing or not executable at $PLUGIN_ROOT/hooks/${hook}.sh — Critical dispatch's runtime defense-in-depth is degraded"
+            record "Hook script ${hook}.sh" fail "missing or unreadable at $PLUGIN_ROOT/hooks/${hook}.sh — Critical dispatch's runtime defense-in-depth is degraded"
         fi
     done
     # Single OK record if all three present
-    if [ -x "$PLUGIN_ROOT/hooks/check-test-protection.sh" ] && \
-       [ -x "$PLUGIN_ROOT/hooks/check-forbidden-conditions.sh" ] && \
-       [ -x "$PLUGIN_ROOT/hooks/check-critical-write-allowlist.sh" ]; then
-        record "Hook scripts on disk" ok "all three hook scripts present and executable in $PLUGIN_ROOT/hooks/"
+    if [ -r "$PLUGIN_ROOT/hooks/check-test-protection.sh" ] && \
+       [ -r "$PLUGIN_ROOT/hooks/check-forbidden-conditions.sh" ] && \
+       [ -r "$PLUGIN_ROOT/hooks/check-critical-write-allowlist.sh" ]; then
+        record "Hook scripts on disk" ok "all three hook scripts present and readable in $PLUGIN_ROOT/hooks/"
     fi
 fi
 

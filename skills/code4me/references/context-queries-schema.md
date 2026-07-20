@@ -127,7 +127,7 @@ Resolution behavior:
   skipped, required unavailable memory blocks with `memory_unavailable`.
 - `protected-list` and `forbidden-conditions`: include file path and small
   contents when present.
-- `project-info`: gather from project structure, `CLAUDE.md`, manifests, and MCP
+- `project-info`: gather from project structure, `AGENTS.md`/`CLAUDE.md`, manifests, and MCP
   inventory.
 - `dispatch-reminder`: emit stock reminder text.
 

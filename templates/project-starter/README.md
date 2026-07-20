@@ -4,33 +4,33 @@ Scaffold files for a new code4me project. Copied by `/code4me-init` (or copy man
 
 ## What's in here
 
-- **`CLAUDE.md.example`** — annotated starter for your project's `CLAUDE.md` (the project-conventions file that layers on top of the plugin's baseline). Placeholders marked `PLACEHOLDER` or `<...>` should be edited or removed.
-- **`.mcp-recommended.json`** — opinionated starter MCP configuration. Several servers are commented out by default (keys prefixed with `_`) — uncomment per project shape. See the project CLAUDE.md's "Available MCPs" section for documenting preferences.
+- **`CLAUDE.md.example`** — Claude Code project-instructions starter.
+- **`AGENTS.md.example`** — Codex project-instructions starter.
+- **`.mcp-recommended.json`** — optional reference for project-specific MCPs. `/code4me-init` does not copy it; use `bin/code4me-install-deps --configure-mcp` for code4me's standard integrations.
 - **`claude-settings.json.example`** — example file with the two opt-in PreToolUse hooks pre-wired. Destination is `<project-root>/.claude/settings.json` (note the leading dot). Replace `<PLUGIN_DIR>` with the absolute path to your code4me plugin checkout.
 
 ## How to use
 
-If you have `/code4me-init` available (Claude Code with the code4me plugin enabled), run that in the project root and it will:
+Run `/code4me-init` in the project root and it will:
 
-1. Copy `CLAUDE.md.example` → `<project-root>/CLAUDE.md` (only if the file does not already exist — `/code4me-init` will never overwrite a CLAUDE.md you've already written).
-2. Copy `.mcp-recommended.json` → `<project-root>/.mcp.json` (only if the file does not already exist).
-3. Copy `claude-settings.json.example` → `<project-root>/.claude/settings.json` (only if the file does not already exist), substituting `<PLUGIN_DIR>` with the absolute path to the plugin.
-4. Also copy the runtime `.code4me/` skeleton (separately) from `templates/.code4me-skeleton/` to `<project-root>/.code4me/` — this is the working directory for milestone artifacts, separate from these project-conventions files.
+1. Copy `AGENTS.md.example` to `AGENTS.md` for Codex, or `CLAUDE.md.example` to `CLAUDE.md` for Claude Code, only when the target does not exist.
+2. Copy the runtime `.code4me/` skeleton to `<project-root>/.code4me/` when it does not exist.
+3. Leave hooks, MCP registrations, and machine-local paths to the installer scripts.
 
 Manual flow (if you'd rather):
 
 ```bash
 # from your project root
 cp <PLUGIN_DIR>/templates/project-starter/CLAUDE.md.example         CLAUDE.md
-cp <PLUGIN_DIR>/templates/project-starter/.mcp-recommended.json     .mcp.json
-mkdir -p .claude
-cp <PLUGIN_DIR>/templates/project-starter/claude-settings.json.example .claude/settings.json
+# Codex instead:
+cp <PLUGIN_DIR>/templates/project-starter/AGENTS.md.example          AGENTS.md
 
-# then edit each file: replace placeholders, set PLUGIN_DIR, configure MCPs
+# then edit the placeholders and run the relevant installer commands
 ```
 
 ## What's NOT in here
 
-- **`.lsp.json`** — language-server configuration is plugin-shipped, not project-scoped. The plugin's root `.lsp.json` applies; you don't need a per-project copy. Add a language by adding a sibling key to the plugin's `.lsp.json` per README "LSP support → Adding another language."
+- **`.lsp.json`** — legacy optional and owned by `bin/code4me-install --with-lsp`, not init.
+- **Hook and MCP configuration** — Claude hooks are owned by `bin/code4me-install`, Codex hooks are bundled with the plugin, and MCPs are owned by `bin/code4me-install-deps`; init does not duplicate them.
 - **MCP credentials** — the recommended config references environment variables (e.g., `GITHUB_PERSONAL_ACCESS_TOKEN`); set them in your shell, not in version-controlled files.
-- **`.code4me/` runtime artifacts** — these live in a separate skeleton at `templates/.code4me-skeleton/`. The orchestrator copies them on first dispatch if `.code4me/` does not exist; `/code4me-init` also handles this.
+- **`.code4me/` runtime artifacts in this directory** — they live in the separate `templates/.code4me-skeleton/`; `/code4me-init` copies that skeleton.

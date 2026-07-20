@@ -2,7 +2,7 @@
 
 **A multi-agent SDLC orchestrator for Claude Code and Codex.** Turn a one-line user request into a structured workflow: a lead architect designs, a challenger architect critiques, a spec-to-test engineer authors the test gate, a developer implements, and a quality-gate loop (verification + code review + QA) attests the work — all dispatched as agent roles, with optional cross-vendor pairing through OpenAI's Codex CLI or DeepSeek's Reasonix CLI for dialectic.
 
-**Status:** `0.15.2-dev` — supervised improvement supports explicit Anthropic API, Claude subscription, Codex, and Reasonix judge backends.
+**Status:** `0.15.3-dev` — supervised improvement supports explicit Anthropic API, Claude subscription, Codex, and Reasonix judge backends.
 
 ## What it does, concretely
 
@@ -38,7 +38,7 @@ The repo ships both `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`
 Put the checkout where Claude Code loads plugins, commonly `~/.claude/plugins/code4me`, then open a Claude Code session in your project:
 
 ```text
-/code4me-init        # scaffold templates: CLAUDE.md, .claude/settings.json, .code4me/
+/code4me-init        # scaffold CLAUDE.md + .code4me/ for Claude
 /code4me-preflight   # confirm jq, hooks wired, optional integrations available
 ```
 
@@ -50,6 +50,8 @@ Install or expose this checkout as a Codex plugin so Codex sees `.codex-plugin/p
 bash bin/code4me-install-deps --check
 ```
 
+In the target project, `/code4me-init` scaffolds `AGENTS.md` and `.code4me/`. It does not create Claude files or MCP configuration. Codex hooks are bundled with the plugin; run `/hooks` once to review and trust them.
+
 Recommended Codex-side setup:
 
 ```bash
@@ -59,7 +61,7 @@ bash bin/code4me-install-deps --install indexes
 bash bin/code4me-install-deps --configure-mcp codex
 ```
 
-Use `--configure-mcp claude` or `--configure-mcp all` for other orchestrator setups. Configuration is idempotent: existing MCP entries are preserved. The installer closes with a checklist for restarts, context-mode hook trust, per-project indexing, and any missing prerequisites.
+Use `--configure-mcp claude` or `--configure-mcp all` for other orchestrator setups. Configuration is idempotent: existing MCP entries are preserved. The installer closes with a checklist for restarts, required code4me hook trust, context-mode hook trust, per-project indexing, and any missing prerequisites.
 
 Optional local Claude consultation backend:
 
@@ -87,7 +89,7 @@ Then start Codex in the target project and use the same code4me commands/prompts
 1. **Five workflow weights, not one process.** Trivial / Conversation / Light / Standard / Critical. The orchestrator classifies per-request and runs the smallest workflow that satisfies the stakes. A typo fix doesn't pay Standard-Mode dispatch overhead; a Critical change gets dual architect Co-Approval, full quality-gate loop, and Security Review. v0.13 adds an orthogonal **solo execution mode**: on explicit request, the orchestrator implements Conversation/Light/Standard work inline — loop speed — while still dispatching one fresh-context review gate and keeping the protection hooks binding on its own edits.
 2. **The Producer is the orchestrator, you're the Product Owner.** No separate PM role to coordinate. The orchestrator does classification, team composition, dispatch, persistence, and routing. You confirm intent, sign off on closes, and stay out of the dispatch loop.
 3. **Adaptive routing without silent vendor changes.** Model profile and reasoning effort are separate decisions. Vendor bridges remain explicit opt-ins; changing effort never enables Codex, DeepSeek, or Claude wrapper participation.
-4. **Hooks ask, never deny.** Four PreToolUse hooks (test protection, Conversation-Mode forbidden conditions, Critical-Mode write allowlist, structural-first redirect) all return `permissionDecision: ask`. A misconfigured hook is a warning, never a hard block. Defense-in-depth without panic-button risk.
+4. **Hooks guard the workflow.** Four PreToolUse hooks cover test protection, Conversation-Mode forbidden conditions, Critical-Mode write scope, and structural-first routing. Claude receives approval prompts. Codex blocks matching calls because its PreToolUse API does not support an `ask` decision; resolve the condition or update the relevant `.code4me` policy before retrying.
 5. **Probes are the spec.** Every behaviour the orchestrator promises has a corresponding probe under `probes/`. Regressions are caught by running the probe suite (`bin/code4me-probe-run`). The audit tool (`bin/code4me-audit-dispatch-log`) reads the dispatch-log JSONL to surveille drift in dispatch patterns, cost rollups, hook ask-gate rates, and Trivial-weight classification frequency.
 
 ## Optional integrations
@@ -101,7 +103,6 @@ All optional — the plugin works fully without any of them:
 - **[LSP servers](docs/howto-configure-lsp.md)** — legacy optional path for type-precise language-server queries. Standard installs no longer generate `.lsp.json`; use `bin/code4me-install --with-lsp` only if needed.
 - **[OpenAI Codex CLI](docs/howto-enable-codex.md)** — enables the `codex-bridge` skill for cross-vendor pairing with OpenAI models.
 - **[Claude wrapper (`claude-p`)](docs/howto-use-claude-wrapper.md)** — optional local Claude Code subscription-session backend, useful when Codex is the orchestrator and you want to consult Claude without the Anthropic API path.
-- **[Codex hooks](docs/howto-use-codex-hooks.md)** — optional `.codex/hooks.json` template for structural-first and write-protection hooks in Codex.
 - **[DeepSeek / Reasonix CLI](docs/howto-enable-deepseek.md)** — enables the `deepseek-bridge` skill for DeepSeek models. Authentication via `DEEPSEEK_API_KEY` env var OR the wizard-populated `~/.reasonix/config.json`.
 - **[Trello MCP](skills/trello-sync/SKILL.md)** — projects the milestone tracker to a Trello board. One card per acceptance criterion (v0.12+).
 - **[Spec Kit](docs/howto-use-spec-kit.md)** — consume GitHub Spec Kit `spec.md` / `plan.md` artifacts at intake.
@@ -148,7 +149,7 @@ The docs follow a [Diataxis](https://diataxis.fr/) split:
 
 | Command | Purpose |
 |---|---|
-| `/code4me-init` | Scaffold a new project (templates + `.code4me/`) |
+| `/code4me-init` | Scaffold native project instructions (`AGENTS.md` or `CLAUDE.md`) + `.code4me/` |
 | `/code4me-preflight [--critical]` | Sanity-check the dispatch environment |
 | `/code4me-classify <task>` | Intake + classification only (no dispatch) |
 | `/code4me-dispatch <weight> [--cross-vendor] [--solo] <task>` | Explicit weight, skip intake; `--solo` runs it solo (v0.13+) |
@@ -169,7 +170,7 @@ The [CHANGELOG](CHANGELOG.md) carries the version-by-version history with ration
 
 - **v0.15.0** — isolated multi-vendor probe judges (`anthropic-api`, `claude-p`, `codex`, `reasonix`) with frozen backend/provider/model/effort metadata and no billing-changing fallback.
 - **v0.14.1** — current Anthropic/OpenAI/DeepSeek mappings, independent model and effort routing, project-overrideable Reasonix aliases, full-contract probe judging, and supervised `/code4me-improve` experiments with executable external held-out evaluation.
-- **v0.13.2** — Codex plugin manifest, Codex-as-orchestrator guidance, dependency checker/installer (`bin/code4me-install-deps`), Basic Memory replacing OpenWolf/buglog, CocoIndex support, `claude-p` subprocess helper/docs/preflight, optional Codex hooks template, and structural-first ordering so context-mode stays behind codegraph/CocoIndex.
+- **v0.13.2** — Codex plugin manifest, Codex-as-orchestrator guidance, dependency checker/installer (`bin/code4me-install-deps`), Basic Memory replacing OpenWolf/buglog, CocoIndex support, `claude-p` subprocess helper/docs/preflight, and structural-first ordering so context-mode stays behind codegraph/CocoIndex.
 - **v0.13.1** — audit4me Phase 1, self-locating project installer, session-wiring detector, Windows path-normalization tests, and legacy LSP made opt-in.
 - **v0.13** — solo execution mode, structural-index-first source lookup, codegraph integration, and public-release portability work.
 - **v0.12** — Milestone decomposition enforced at intake (≥1 task per acceptance criterion). Trello cards become AC-shaped, one card per acceptance criterion.

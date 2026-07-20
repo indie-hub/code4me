@@ -9,7 +9,7 @@
       "name": "code4me",
       "source": "./",
       "description": "Multi-agent SDLC orchestrator with workflow weights, quality gates, independent model/effort routing, opt-in Anthropic/OpenAI/DeepSeek bridges, supervised improvement experiments, and audit4me.",
-      "version": "0.15.2-dev",
+      "version": "0.15.3-dev",
       "author": {
         "name": "Bruno"
       },

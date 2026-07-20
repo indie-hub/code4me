@@ -204,6 +204,7 @@ jobs:
       - name: Windows path-normalization regression test
         run: |
           bash tests/hooks/test-windows-paths.sh
+          bash tests/hooks/test-codex-hooks.sh
           bash tests/install/test-preflight-crlf.sh
 
       - name: Model, audit, probe, and wrapper behavioral tests
@@ -230,7 +231,9 @@ jobs:
         run: bash tests/hooks/test-windows-paths.sh
 
       - name: structural-first hook test
-        run: bash tests/hooks/test-structural-first.sh
+        run: |
+          bash tests/hooks/test-structural-first.sh
+          bash tests/hooks/test-codex-hooks.sh
 
       - name: audit4me helpers + rebuild-coverage test
         run: bash tests/audit4me/test-helpers.sh

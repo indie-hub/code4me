@@ -2,16 +2,45 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Read|Grep|mcp__plugin_context-mode_context-mode__ctx_execute|mcp__plugin_context-mode_context-mode__ctx_execute_file|mcp__plugin_context-mode_context-mode__ctx_batch_execute",
+        "matcher": "apply_patch|Edit|Write|MultiEdit",
         "hooks": [
-        { "type": "command", "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/check-structural-first-on-source.sh" }
-      ]
-    }
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/codex-pretool-adapter.sh\" check-test-protection.sh",
+            "statusMessage": "Checking protected tests"
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/codex-pretool-adapter.sh\" check-forbidden-conditions.sh",
+            "statusMessage": "Checking workflow scope"
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/codex-pretool-adapter.sh\" check-critical-write-allowlist.sh",
+            "statusMessage": "Checking critical scope"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Read|Grep|mcp__plugin_context-mode_context-mode__ctx_execute|mcp__plugin_context-mode_context-mode__ctx_execute_file|mcp__plugin_context-mode_context-mode__ctx_batch_execute|mcp__context_mode__ctx_execute|mcp__context_mode__ctx_execute_file|mcp__context_mode__ctx_batch_execute",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/codex-pretool-adapter.sh\" check-structural-first-on-source.sh",
+            "statusMessage": "Checking structural-first routing"
+          }
+        ]
+      }
     ],
     "SessionStart": [
       {
+        "matcher": "startup|resume|clear|compact",
         "hooks": [
-          { "type": "command", "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/check-session-wiring.sh" }
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/check-session-wiring.sh\"",
+            "statusMessage": "Checking code4me wiring"
+          }
         ]
       }
     ]

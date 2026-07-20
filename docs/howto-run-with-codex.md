@@ -10,6 +10,8 @@ cd code4me
 bash bin/code4me-install-deps --check
 ```
 
+In the target project, run `/code4me-init`. Under Codex it previews and creates only `AGENTS.md` and `.code4me/`; MCPs remain installer-owned and hooks come from the plugin bundle.
+
 Expose this checkout as a Codex plugin so Codex can read `.codex-plugin/plugin.json`. Then install the common optional tools you want:
 
 ```bash
@@ -44,16 +46,15 @@ bash <CODE4ME_PLUGIN_DIR>/bin/code4me-claude-wrapper-run --prompt-file prompt.md
 
 The wrapper returns `claude-p --output-format json` output and uses the local Claude Code login state.
 
-## Optional Codex hooks
+## Required Codex hooks
 
-See [Use code4me hooks with Codex](howto-use-codex-hooks.md). The short version:
+The plugin bundles its Codex hooks. No `.codex/hooks.json` copy or path replacement is needed. Start Codex and run:
 
-```bash
-mkdir -p .codex
-cp <CODE4ME_PLUGIN_DIR>/templates/project-starter/codex-hooks.json.example .codex/hooks.json
+```text
+/hooks
 ```
 
-Replace `<PLUGIN_DIR>`, then run `/hooks` in Codex to review and trust the hooks.
+Review and trust the current code4me hook definition. Codex skips untrusted plugin hooks, so this is a required one-time action after installation and again whenever the bundled hook definition changes.
 
 ## Preflight
 
@@ -63,4 +64,4 @@ From the plugin checkout:
 bash bin/code4me-preflight
 ```
 
-Missing optional tools degrade gracefully. Basic Memory, codegraph, CocoIndex, Codex hooks, and `claude-p` improve the workflow but are not required for simple code4me operation.
+Missing optional tools degrade gracefully. Basic Memory, codegraph, CocoIndex, and `claude-p` improve the workflow but are not required for simple code4me operation. The bundled Codex hooks are part of the core workflow.

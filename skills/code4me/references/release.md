@@ -61,7 +61,7 @@ These additions exist because Critical-weight work has higher consequences for b
 
 The plugin doesn't define what "release" looks like for your codebase — that's project-shape-dependent. For a library it might mean publishing to npm; for a service it might mean deployment to production; for a Unity game it might mean shipping a build to a store. The Release Rule governs the *gate*: whether the orchestrator considers the milestone ready, regardless of how the project actually distributes its output.
 
-The user's project's `CLAUDE.md` should document what "release" means in their context — the actual deployment steps, version management conventions, etc. The plugin's role is gating, not deployment.
+The project's `AGENTS.md` or `CLAUDE.md` should document what "release" means in its context — the actual deployment steps, version management conventions, etc. The plugin's role is gating, not deployment.
 
 ## Recording the release
 

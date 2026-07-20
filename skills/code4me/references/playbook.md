@@ -9,7 +9,7 @@ Read this when you hit a decision point the `SKILL.md` contract doesn't already 
 As of v0.6, each agent declares its own Context Pack requirements in a `context_queries:` frontmatter block. See `references/context-queries-schema.md` for the schema. At dispatch time, the orchestrator:
 
 1. **Reads the agent's `context_queries:`** — if present, resolve each query per the schema; if absent, fall back to the v0.5 imperative list below.
-2. **Resolves queries** — fetch artifacts from `.code4me/`, query Basic Memory when its MCP tools are available, gather project-info from `CLAUDE.md` and project structure, emit declared dispatch reminders. Evaluate `when:` conditions against the dispatch's weight/mode to skip non-applicable queries.
+2. **Resolves queries** — fetch artifacts from `.code4me/`, query Basic Memory when its MCP tools are available, gather project-info from `AGENTS.md`/`CLAUDE.md` and project structure, emit declared dispatch reminders. Evaluate `when:` conditions against the dispatch's weight/mode to skip non-applicable queries.
 3. **Assembles the Context Pack** from resolved results.
 4. **Records provenance** for every resolved query in the dispatch-log line under `context_provenance` per `references/context-queries-schema.md` §Resolution provenance — `query_kind`, `query_descriptor`, `resolved_artifact`, `resolved_sha` (when in git), and `skipped` for queries that evaluated but resolved to no content. The audit tool reads this to answer "what was in the Context Pack for this dispatch?"
 5. **Appends universal items** that every dispatch needs regardless of agent:
@@ -151,13 +151,13 @@ This single line is the orchestrator's decision audit trail — visible in the t
 
 ## Language-guidance injection rationale
 
-The plugin injects language guidance explicitly rather than relying on the project's `CLAUDE.md` hierarchy because:
+The plugin injects language guidance explicitly rather than relying on the project's `AGENTS.md`/`CLAUDE.md` hierarchy because:
 
-- Projects vary in `CLAUDE.md` layout — flat, hierarchical, monorepo, atypical.
-- Subagent-context propagation of `CLAUDE.md` across the Task-tool boundary isn't guaranteed.
+- Projects vary in project-instructions layout — flat, hierarchical, monorepo, atypical.
+- Subagent-context propagation of project instructions across the Task-tool boundary isn't guaranteed.
 - Plugin-shipped baseline plus orchestrator-side injection at dispatch ensures the subagent gets baseline language coverage regardless of project layout.
 
-The project's own `CLAUDE.md` (root or hierarchical) layers on top via Claude Code's normal mechanisms, and project-specific guidance authoritatively overrides the plugin's generic content (the language files explicitly say so).
+The project's own `AGENTS.md` or `CLAUDE.md` (root or hierarchical) layers on top via the current client's normal mechanisms, and project-specific guidance authoritatively overrides the plugin's generic content (the language files explicitly say so).
 
 ## Tooling preferences (orchestrator detail)
 

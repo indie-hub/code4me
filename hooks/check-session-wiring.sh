@@ -20,6 +20,8 @@ emit_quiet() { printf '{}'; exit 0; }
 
 command -v jq >/dev/null 2>&1 || emit_quiet
 
+CODEX_HOOK_RUNTIME=0
+[ -n "${PLUGIN_ROOT:-}" ] && CODEX_HOOK_RUNTIME=1
 HOOK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PLUGIN_ROOT="$( cd "$HOOK_DIR/.." && pwd )"
 . "$HOOK_DIR/c4m-pathlib.sh" 2>/dev/null || emit_quiet
@@ -28,7 +30,7 @@ PROJECT_DIR="$(c4m_slashify "${CLAUDE_PROJECT_DIR:-$PWD}")"
 PROBLEMS=""
 
 SETTINGS="$PROJECT_DIR/.claude/settings.json"
-if [ -r "$SETTINGS" ] && jq -e . "$SETTINGS" >/dev/null 2>&1; then
+if [ "$CODEX_HOOK_RUNTIME" -eq 0 ] && [ -r "$SETTINGS" ] && jq -e . "$SETTINGS" >/dev/null 2>&1; then
     while IFS= read -r cmdpath; do
         [ -n "$cmdpath" ] || continue
         case "$cmdpath" in

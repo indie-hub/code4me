@@ -4,7 +4,14 @@ All notable changes to this plugin will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.15.2-dev] — in progress
+## [0.15.3-dev] — in progress
+
+### Changed
+
+- `/code4me-init` is now client-aware and project-only: Codex gets `AGENTS.md`, Claude Code gets `CLAUDE.md`, and both get `.code4me/`. Init no longer duplicates installer ownership by creating MCP, hook, or LSP configuration.
+- Codex hooks are now a required plugin-bundled surface instead of an optional project template. A Codex adapter checks every path in `apply_patch` payloads and maps unsupported `ask` gates to actionable denies; Claude keeps its existing approval prompts.
+
+## [0.15.2-dev]
 
 ### Added
 

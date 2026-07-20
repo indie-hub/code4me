@@ -12,7 +12,7 @@ Never run solo unless one of the following is true:
 
 - (a) the user said **"solo"** at intake (e.g., "solo mode: add the CSV export", "do this one solo"), OR
 - (b) the user passed the **`--solo` flag** on `/code4me-dispatch`, OR
-- (c) the project's `CLAUDE.md` declares a **project-level solo default** (e.g., `code4me: solo default for Conversation/Light`) — in which case announce that the default applied and which weights it covers.
+- (c) the project's `AGENTS.md` or `CLAUDE.md` declares a **project-level solo default** (e.g., `code4me: solo default for Conversation/Light`) — in which case announce that the default applied and which weights it covers.
 
 **Inferring solo from the task's size, the perceived dispatch overhead, time pressure, or the orchestrator's confidence is a workflow violation** — identical discipline to the codex-bridge and deepseek-bridge gates. If solo seems like a good fit, you may *suggest* it ("This looks like a good solo-mode candidate — want me to run it solo?") and wait for the answer. When uncertain, dispatch normally.
 
@@ -82,7 +82,7 @@ Same as Conversation solo. If the task warrants the architect-notify that Light 
 
 ## Transparency announcement
 
-> Task `{task_id}` ({weight}, **solo**): orchestrator implements inline; retained gate: {combined-reviewer|verification} ({vendor}:{tier}). Solo requested via: {user keyword | --solo flag | CLAUDE.md default}. {One-line scope statement.}
+> Task `{task_id}` ({weight}, **solo**): orchestrator implements inline; retained gate: {combined-reviewer|verification} ({vendor}:{tier}). Solo requested via: {user keyword | --solo flag | project-instructions default}. {One-line scope statement.}
 
 The `Solo requested via:` clause is mandatory — it is the auditable record that the entry gate was satisfied.
 

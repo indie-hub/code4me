@@ -1,5 +1,5 @@
 ---
-description: Run the code4me preflight sanity checks via bin/code4me-preflight. Validates that the environment is dispatch-ready — .code4me/ directory exists, hooks installed, structural indexes available, optional bridge CLIs present if needed, jq available for the audit/probe tools. Optional --critical flag enables extra checks (critical-allowlist content, hook scripts on disk). Exit code is non-zero if any required check fails.
+description: Run the code4me preflight sanity checks via bin/code4me-preflight. Validates that the environment is dispatch-ready — .code4me/ directory exists, required Codex hooks are bundled or Claude hooks are installed, structural indexes are available, optional bridge CLIs are present if needed, and jq is available for audit/probe tools. Optional --critical enables extra checks. Exit code is non-zero if any required check fails.
 argument-hint: [--critical] [--quiet]
 ---
 
