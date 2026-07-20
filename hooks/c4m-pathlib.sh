@@ -3,12 +3,12 @@
 # (check-test-protection, check-forbidden-conditions, check-critical-write-
 # allowlist).
 #
-# Centralises Windows path normalisation. Under Git Bash / MSYS, Claude Code
-# passes Windows-style paths (C:\Users\... or C:/Users/...). The previous
+# Centralises Windows path normalisation. Under Git Bash / MSYS, clients may
+# pass Windows-style paths (C:\Users\... or C:/Users/...). The previous
 # POSIX-only absolute-path test `case "$p" in /*)` mis-classified those as
 # RELATIVE, so the project dir was wrongly prepended and no allowlist /
 # protected / forbidden pattern could ever match. For the critical-write
-# allowlist that meant every Edit/Write ask-gated ("all files protected");
+# allowlist that meant every Edit/Write was guarded ("all files protected");
 # for test-protection it meant protected tests were silently editable.
 #
 # This file is meant to be SOURCED, not executed. It defines functions only

@@ -23,7 +23,6 @@ Hamel Husain's highest-ROI evals advice is "spend 30 minutes reading 20–50 tra
 5. **Tier-deviation rationale.** When `tier_deviated_from_default: true`, check whether the deviation was a one-off (complexity surprise) or persistent (the default for that (subagent, weight) combo is wrong). The audit tool's "Tier deviation (v0.7+)" section auto-surfaces >50% rates; below that threshold, eyeball the pattern.
 6. **Pairing degradation reasons.** `vendor_pairing.degraded` values (`shim_unavailable`, `user_override`, etc.) tell you whether the alternation rule fired cleanly or had to fall back. Persistent `shim_unavailable` means the user enabled cross-vendor but didn't complete the Codex setup; the dispatches are running same-vendor by default, defeating the opt-in.
 7. **Auto-escalation triggers vs. user's declared weight.** When `escalation_trigger` is non-null, the user declared a lower weight than the work warranted. Repeated escalations of the same kind mean the user is consistently underestimating — either improve the auto-escalation symptom list or train the user.
-8. **Spec Kit interop** (`spec_kit_interop: true`, v0.9+). Confirms when Spec Kit inputs were consumed. Compare against the actual `specs/<feature>/spec.md` content; mismatches mean the orchestrator picked up a stale spec.
 
 ### Tier 3 — periodically, every few months
 

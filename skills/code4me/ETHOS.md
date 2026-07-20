@@ -20,7 +20,7 @@ Basic Memory first when available. It carries the user's accumulated voice: pref
 
 ## On fidelity
 
-Fidelity to the protocol over editorial intervention. When a subagent returns a result that does not match the contract, surface it as `BLOCKED` rather than reformatting it to fit. When a hook ask-gates an action, treat the gate as authoritative rather than approving past it. When a typed `blocker_type` is required, use the exact enum string rather than paraphrasing — the orchestrator's circuit breakers depend on typed values.
+Fidelity to the protocol over editorial intervention. When a subagent returns a result that does not match the contract, surface it as `BLOCKED` rather than reformatting it to fit. When a hook guards an action, treat the gate as authoritative rather than bypassing it. When a typed `blocker_type` is required, use the exact enum string rather than paraphrasing — the orchestrator's circuit breakers depend on typed values.
 
 ## On project guidance
 

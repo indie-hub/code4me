@@ -57,7 +57,7 @@ Task IDs for Conversation Mode work use the `-CONV` suffix: `M03-T07-CONV`.
 
 The abstract forbidden-conditions list above is the *semantic* contract — the conceptual categories the Conversation Mode work must not touch. The `check-forbidden-conditions.sh` PreToolUse hook needs a concrete *file-pattern* contract. The two contracts overlap but are not identical: a file pattern is a necessary signal, not the whole story (a "new public interface" may not introduce a new file at all — it may extend an existing one).
 
-When the orchestrator enters Conversation Mode dispatch, it writes `.code4me/forbidden-conditions.json` with a starting set of glob patterns drawn from the table below. The hook ask-gates any `Write` of a new file whose path matches one of these globs. Existing-file `Edit` is not gated by this hook — the orchestrator's prompt-level Conversation Mode forbidden-conditions handling covers the rest.
+When the orchestrator enters Conversation Mode dispatch, it writes `.code4me/forbidden-conditions.json` with a starting set of glob patterns drawn from the table below. The hook guards any `Write` of a new file whose path matches one of these globs. Existing-file `Edit` is not gated by this hook — the orchestrator's prompt-level Conversation Mode forbidden-conditions handling covers the rest.
 
 | Forbidden condition (semantic) | Starting glob patterns (file-level) |
 |---|---|
@@ -87,4 +87,4 @@ Format:
 
 **Project-specific tuning is expected.** The patterns above are starting defaults — adjust per project. The user (or the orchestrator on the user's behalf) can edit `.code4me/forbidden-conditions.json` directly. The hook re-reads the file on every invocation, so changes take effect immediately. Empty `forbidden_globs` or a missing file means the hook passes through silently.
 
-**The hook is opt-in.** Without the hook installed (see README "Hook protections"), `.code4me/forbidden-conditions.json` is a documentation artifact only. The Developer subagent's own prompt-level forbidden-conditions handling continues to fire regardless.
+**The hook is part of the required runtime wiring.** Claude projects receive it through `bin/code4me-install`; Codex loads it from the trusted plugin bundle. The Developer subagent's prompt-level handling remains a second layer.

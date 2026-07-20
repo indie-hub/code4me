@@ -110,7 +110,7 @@ if [ "$SOLO_INLINE_COUNT" -gt 0 ]; then
     jq -r 'select(.subagent == "orchestrator-inline (solo)") | .solo_requested_via // "(missing)"' "$LOG" 2>/dev/null | \
         sort | uniq -c | sort -rn | \
         awk '{ count = $1; $1 = ""; sub(/^ /, ""); printf "| %s | %d |\n", $0, count }'
-    printf '\n_Every solo entry must carry `solo_requested_via` (user-keyword | flag | claude-md-default). "(missing)" rows are malformed — solo may have run without its explicit-entry gate. Investigate._\n\n'
+    printf '\n_Every solo entry must carry `solo_requested_via` (user-keyword | flag | project-instructions-default). "(missing)" rows are malformed — solo may have run without its explicit-entry gate. Investigate._\n\n'
 
     # Gate outcomes for solo tasks — the drift signature.
     SOLO_GATE_TOTAL=$(jq -r 'select(.execution_mode == "solo" and .subagent != "orchestrator-inline (solo)") | .subagent' "$LOG" 2>/dev/null | wc -l | tr -d ' ')

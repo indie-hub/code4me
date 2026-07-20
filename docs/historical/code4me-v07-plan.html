@@ -305,13 +305,6 @@
   <h3>Category E — Workflow extensions</h3>
 
   <div class="item">
-    <div class="label">E1 <span class="priority p2">P2</span></div>
-    <div class="body">
-      <p><strong>Spec Kit interop.</strong> If a project has used GitHub's Spec Kit to produce a <code>spec.md</code> and <code>plan.md</code>, the orchestrator should accept those as inputs equivalent to a Milestone Spec + Tech Spec. Concretely: at intake, check for <code>specs/&lt;feature&gt;/spec.md</code> and <code>specs/&lt;feature&gt;/plan.md</code>; if present, skip Product Coach / Lead Architect for the parts already covered, and dispatch Challenger Architect (or codex-architect) for the soundness review instead. Keeps Spec Kit's strong upstream artifact pipeline; code4me handles execution.</p>
-    </div>
-  </div>
-
-  <div class="item">
     <div class="label">E2 <span class="priority p3">P3</span></div>
     <div class="body">
       <p><strong>Playwright MCP as a recommended verifier tool.</strong> Visual verification is one of the highest-ROI additions for any UI-touching work — 60%+ debugging time reduction per the field guide's research. Add Playwright MCP to the recommended starter <code>.mcp.json</code> (A2), and add a Verification-subagent directive: when the milestone touches files under known UI paths, run the smoke check through Playwright if available, capture a screenshot to <code>.code4me/screenshots/</code>, and reference it in the verification report.</p>
@@ -781,7 +774,6 @@ context_queries: [...]
       <li><strong>A3</strong> Description rewrite (after measuring activation precision)</li>
       <li><strong>C1</strong> Diataxis README split</li>
       <li><strong>C3</strong> Probe-baseline note</li>
-      <li><strong>E1</strong> Spec Kit interop</li>
       <li><strong>E2</strong> Playwright MCP recommended addition + verifier directive</li>
       <li><strong>F2</strong> Sanity probes for pre-flight</li>
       <li><strong>B4</strong> Trace-review discipline doc</li>
@@ -809,7 +801,7 @@ context_queries: [...]
   </ul>
 </section>
 
-<p class="footer">Companion document to <em>The Agentic SDLC Field Guide — 2026</em>. Specific to the code4me plugin at v0.6.1. Recommendations grounded in observed patterns from the field guide's source set: Fowler's harness engineering, Anthropic's effective-agents and context-engineering posts, Hamel Husain's evals discipline, the GitHub Spec Kit pattern, gstack's command surface, and the multi-vendor advisor pattern from Latent Space coverage.</p>
+<p class="footer">Companion document to <em>The Agentic SDLC Field Guide — 2026</em>. Specific to the code4me plugin at v0.6.1. Recommendations grounded in observed patterns from the field guide's source set: Fowler's harness engineering, Anthropic's effective-agents and context-engineering posts, Hamel Husain's evals discipline, gstack's command surface, and the multi-vendor advisor pattern from Latent Space coverage.</p>
 
 </div>
 </body>

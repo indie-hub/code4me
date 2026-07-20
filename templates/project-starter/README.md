@@ -7,7 +7,7 @@ Scaffold files for a new code4me project. Copied by `/code4me-init` (or copy man
 - **`CLAUDE.md.example`** — Claude Code project-instructions starter.
 - **`AGENTS.md.example`** — Codex project-instructions starter.
 - **`.mcp-recommended.json`** — optional reference for project-specific MCPs. `/code4me-init` does not copy it; use `bin/code4me-install-deps --configure-mcp` for code4me's standard integrations.
-- **`claude-settings.json.example`** — example file with the two opt-in PreToolUse hooks pre-wired. Destination is `<project-root>/.claude/settings.json` (note the leading dot). Replace `<PLUGIN_DIR>` with the absolute path to your code4me plugin checkout.
+- **`claude-settings.json.example`** — reference shape for Claude project hooks. Prefer `bin/code4me-install`, which writes current machine-local paths safely.
 
 ## How to use
 

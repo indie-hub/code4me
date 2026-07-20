@@ -69,7 +69,7 @@ Use text search for genuinely text-shaped queries:
 
 ## Runtime Hook
 
-`hooks/check-structural-first-on-source.sh` ask-gates common source-consultation
+`hooks/check-structural-first-on-source.sh` guards common source-consultation
 fallback shapes when a structural code surface is present:
 
 - whole-file `Read` of a source file
@@ -84,8 +84,8 @@ for projects that already have it in `.claude/settings.json`.
 
 ## Proceed Cases
 
-Type "yes" at the ask-gate when the query is intentionally text-shaped or an
-index cannot answer it:
+When the query is intentionally text-shaped or an index cannot answer it,
+approve the Claude prompt or follow the Codex denial's fallback guidance:
 
 - regex in comments or strings
 - generated files or build outputs

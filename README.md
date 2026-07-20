@@ -2,7 +2,7 @@
 
 **A multi-agent SDLC orchestrator for Claude Code and Codex.** Turn a one-line user request into a structured workflow: a lead architect designs, a challenger architect critiques, a spec-to-test engineer authors the test gate, a developer implements, and a quality-gate loop (verification + code review + QA) attests the work — all dispatched as agent roles, with optional cross-vendor pairing through OpenAI's Codex CLI or DeepSeek's Reasonix CLI for dialectic.
 
-**Status:** `0.15.3-dev` — supervised improvement supports explicit Anthropic API, Claude subscription, Codex, and Reasonix judge backends.
+**Status:** `0.15.4-dev` — Claude Code and Codex share one installable workflow with client-aware hooks and project initialization.
 
 ## What it does, concretely
 
@@ -23,66 +23,125 @@ You see the work happen. You stay the Product Owner. The orchestrator handles th
 
 ## Install
 
-Clone the plugin once:
+### 1. Prerequisites
+
+Install Git plus Claude Code, Codex, or both. On Windows, run the shell commands below from Git Bash or WSL; native `cmd.exe` and PowerShell-only environments are not supported.
+
+### 2. Clone the repository
 
 ```bash
 git clone https://github.com/indie-hub/code4me.git code4me
 cd code4me
-bash bin/code4me-install-deps --check
 ```
 
-The repo ships both `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`; Claude Code and Codex can load the same checkout.
+Keep this checkout: its installer scripts configure dependencies and Claude project hooks.
 
-### Claude Code as orchestrator
+### 3. Install the plugin
 
-Put the checkout where Claude Code loads plugins, commonly `~/.claude/plugins/code4me`, then open a Claude Code session in your project:
-
-```text
-/code4me-init        # scaffold CLAUDE.md + .code4me/ for Claude
-/code4me-preflight   # confirm jq, hooks wired, optional integrations available
-```
-
-### Codex as orchestrator
-
-Install or expose this checkout as a Codex plugin so Codex sees `.codex-plugin/plugin.json`. Then run the dependency check from the plugin checkout:
+For Codex:
 
 ```bash
-bash bin/code4me-install-deps --check
+codex plugin marketplace add indie-hub/code4me
+codex plugin add code4me@code4me-marketplace
 ```
 
-In the target project, `/code4me-init` scaffolds `AGENTS.md` and `.code4me/`. It does not create Claude files or MCP configuration. Codex hooks are bundled with the plugin; run `/hooks` once to review and trust them.
-
-Recommended Codex-side setup:
+For Claude Code:
 
 ```bash
-bash bin/code4me-install-deps --install core
-bash bin/code4me-install-deps --install memory
-bash bin/code4me-install-deps --install indexes
-bash bin/code4me-install-deps --configure-mcp codex
+claude plugin marketplace add indie-hub/code4me
+claude plugin install --scope user code4me@code4me-marketplace
 ```
 
-Use `--configure-mcp claude` or `--configure-mcp all` for other orchestrator setups. Configuration is idempotent: existing MCP entries are preserved. The installer closes with a checklist for restarts, required code4me hook trust, context-mode hook trust, per-project indexing, and any missing prerequisites.
+Run both pairs when using both clients.
 
-Optional local Claude consultation backend:
+### 4. Install dependencies and configure MCPs
+
+From the code4me checkout, install the core utilities, Basic Memory, codegraph, CocoIndex, and context-mode, then configure the selected client:
+
+```bash
+# Codex
+bash bin/code4me-install-deps --install core --install memory --install indexes --configure-mcp codex
+
+# Claude Code
+bash bin/code4me-install-deps --install core --install memory --install indexes --configure-mcp claude
+
+# Both clients
+bash bin/code4me-install-deps --install core --install memory --install indexes --configure-mcp all
+```
+
+The script preserves existing MCP entries and prints a final checklist for anything it could not complete automatically.
+
+Optional cross-vendor agent CLIs:
+
+```bash
+bash bin/code4me-install-deps --install agents
+```
+
+Optional subscription-backed Claude backend for a Codex orchestrator:
 
 ```bash
 bash bin/code4me-install-deps --install claude-wrapper
 claude-p --doctor
 ```
 
-`claude-p` comes from [indie-hub/claude-wrapper](https://github.com/indie-hub/claude-wrapper). It lets a Codex Producer consult local Claude Code through the user's existing Claude Code login state. It is optional; code4me still works in Codex without it.
+`claude-p` comes from [indie-hub/claude-wrapper](https://github.com/indie-hub/claude-wrapper) and uses the local Claude Code login rather than the Anthropic API.
 
-code4me's bounded subprocess helper is `bin/code4me-claude-wrapper-run`; it invokes `claude-p --output-format json` with an explicit prompt file, cwd, timeout, and optional model, effort, and session metadata.
+### 5. Restart the client
 
-For OpenAI/DeepSeek cross-vendor agents:
+Restart Claude Code and/or Codex so the plugin and MCP configuration reload.
 
-```bash
-bash bin/code4me-install-deps --install agents
+### 6. Initialize the project
+
+Open the target project in the orchestrator and run:
+
+```text
+/code4me-init
 ```
 
-Then start Codex in the target project and use the same code4me commands/prompts. See [Run code4me with Codex](docs/howto-run-with-codex.md) for the quickstart. From there, the [tutorial](docs/tutorial.md) walks through your first Conversation Mode milestone end-to-end (~10 minutes).
+Confirm the preview. Codex creates `AGENTS.md` plus `.code4me/`; Claude Code creates `CLAUDE.md` plus `.code4me/`. Existing files are not overwritten. Init does not own MCP, hook, or LSP configuration.
 
-**On Windows:** the hooks and bin scripts are bash. You need WSL or Git Bash — native Windows (cmd.exe / PowerShell only) is not supported. See [docs/howto-windows.md](docs/howto-windows.md) for the setup steps and known quirks.
+### 7. Activate hooks
+
+Claude Code stores project hook paths in `.claude/settings.json`. Install or refresh them from the checkout:
+
+```bash
+bash bin/code4me-install --project /absolute/path/to/project
+```
+
+Do not add `--with-lsp` unless the project deliberately needs the legacy LSP integration.
+
+Codex hooks are bundled with the plugin and require no project hook file. In Codex, run:
+
+```text
+/hooks
+```
+
+Review and trust the code4me hooks. Repeat this whenever an update changes their definition. Claude uses approval prompts for guarded actions; Codex denies the same guarded call with an actionable explanation because Codex PreToolUse does not support `ask`.
+
+### 8. Index the project
+
+From the target project directory:
+
+```bash
+codegraph init -i
+ccc index
+```
+
+### 9. Run preflight
+
+Inside the orchestrator, run:
+
+```text
+/code4me-preflight
+```
+
+Resolve failures before dispatching work. Warnings identify optional or degraded integrations.
+
+### Updating
+
+Pull the checkout, update the marketplace plugin with the client, rerun the dependency/MCP command from step 4, and restart. Claude users should rerun `code4me-install`; Codex users should rerun `/hooks`. Finish with `/code4me-preflight`.
+
+See [Run code4me with Codex](docs/howto-run-with-codex.md), the [tutorial](docs/tutorial.md), and the [Windows guide](docs/howto-windows.md) for client-specific details.
 
 ## Five things that make code4me different
 
@@ -105,7 +164,6 @@ All optional — the plugin works fully without any of them:
 - **[Claude wrapper (`claude-p`)](docs/howto-use-claude-wrapper.md)** — optional local Claude Code subscription-session backend, useful when Codex is the orchestrator and you want to consult Claude without the Anthropic API path.
 - **[DeepSeek / Reasonix CLI](docs/howto-enable-deepseek.md)** — enables the `deepseek-bridge` skill for DeepSeek models. Authentication via `DEEPSEEK_API_KEY` env var OR the wizard-populated `~/.reasonix/config.json`.
 - **[Trello MCP](skills/trello-sync/SKILL.md)** — projects the milestone tracker to a Trello board. One card per acceptance criterion (v0.12+).
-- **[Spec Kit](docs/howto-use-spec-kit.md)** — consume GitHub Spec Kit `spec.md` / `plan.md` artifacts at intake.
 
 ## Current model and effort routing
 
@@ -135,12 +193,11 @@ The docs follow a [Diataxis](https://diataxis.fr/) split:
   - [Use Claude wrapper](docs/howto-use-claude-wrapper.md)
   - [Enable DeepSeek](docs/howto-enable-deepseek.md)
   - [Enable cross-vendor pairing](docs/howto-enable-cross-vendor.md)
-  - [Use Spec Kit](docs/howto-use-spec-kit.md)
   - [Use codegraph](docs/howto-use-codegraph.md)
   - [Use CocoIndex](docs/howto-use-cocoindex.md)
   - [Run on Windows](docs/howto-windows.md)
 - **[Reference](docs/reference.md)** — workflow weights, all subagents, slash commands, model tiers, cross-vendor pairing, runtime hooks, audit and analytics, context-query schema, dispatch log shape, folder layout.
-- **[Explanation](docs/explanation.md)** — design-decision rationale. Why five weights, why Co-Approval, why Producer-as-orchestrator, why opt-in cross-vendor, why hooks ask instead of deny.
+- **[Explanation](docs/explanation.md)** — design-decision rationale. Why five weights, why Co-Approval, why Producer-as-orchestrator, why opt-in cross-vendor, and why hook decisions differ by client.
 - **[Roadmap](docs/roadmap.md)** — ear-tagged work that's been considered, scoped, and intentionally deferred; explicit trigger conditions on conditional items.
 - **[audit4me design](docs/audit4me-design.md)** — sibling product spec. Batch, after-hours, cross-vendor codebase auditor. Proposes fixes; code4me applies them via Conversation Mode. Phase 0 (data model + read-only surface) shipped in v0.13.0-dev; Phase 1+ gated on code4me v0.12 soak.
 - **[audit4me build plan](docs/audit4me-build-plan.md)** — operational plan with per-phase sub-tasks, gates, open decisions, and rhythm. Living doc; updated as phases ship.
@@ -168,6 +225,7 @@ The docs follow a [Diataxis](https://diataxis.fr/) split:
 
 The [CHANGELOG](CHANGELOG.md) carries the version-by-version history with rationale per cut. Headline arc:
 
+- **v0.15.4** — complete Claude/Codex installation flow, required plugin-bundled Codex hooks, client-aware hook behavior, and project-only init ownership.
 - **v0.15.0** — isolated multi-vendor probe judges (`anthropic-api`, `claude-p`, `codex`, `reasonix`) with frozen backend/provider/model/effort metadata and no billing-changing fallback.
 - **v0.14.1** — current Anthropic/OpenAI/DeepSeek mappings, independent model and effort routing, project-overrideable Reasonix aliases, full-contract probe judging, and supervised `/code4me-improve` experiments with executable external held-out evaluation.
 - **v0.13.2** — Codex plugin manifest, Codex-as-orchestrator guidance, dependency checker/installer (`bin/code4me-install-deps`), Basic Memory replacing OpenWolf/buglog, CocoIndex support, `claude-p` subprocess helper/docs/preflight, and structural-first ordering so context-mode stays behind codegraph/CocoIndex.
@@ -179,7 +237,7 @@ The [CHANGELOG](CHANGELOG.md) carries the version-by-version history with ration
 - **v0.6** — declarative `context_queries:` schema; dispatch-log audit tool; probe fixture skeleton; two PreToolUse hooks.
 - **v0.7** — vendor-aware model tiers; cross-vendor pairing policy; three Tier-1 Codex shims; slash commands; starter templates; programmatic probe runner.
 - **v0.8** — Tier-2 shims (codex-verification, codex-lead-architect); regression budget; dispatch-log analytics extensions; context-query provenance; third PreToolUse hook (critical-write-allowlist).
-- **v0.9** — codex-developer allowlist pre-screening; Playwright softened to disabled-by-default; Spec Kit interop; pre-flight sanity checks; Diataxis docs split.
+- **v0.9** — codex-developer allowlist pre-screening, Playwright softened to disabled-by-default, pre-flight sanity checks, and the Diataxis docs split.
 
 ## Contributing
 

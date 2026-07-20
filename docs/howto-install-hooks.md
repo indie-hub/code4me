@@ -1,82 +1,72 @@
-# How to install the runtime hooks
+# Install and verify runtime hooks
 
-The plugin ships three opt-in PreToolUse hooks that move specific protections from prompt-level enforcement (trust the subagent) to runtime enforcement (block at the tool boundary). All three return `permissionDecision: ask` (never `deny`) and silently pass through when their state files are absent — a misconfigured hook degrades to a warning, never a hard block.
+code4me uses the same workflow guards in Claude Code and Codex, but each client loads them differently.
 
-| Hook | Fires when | State file written by |
-|---|---|---|
-| `check-test-protection.sh` | Edit/Write/MultiEdit targets a path in the protected-tests manifest | Spec-to-Test subagent during canonical workflows |
-| `check-forbidden-conditions.sh` | Write creates a new file matching a Conversation-Mode forbidden glob (migrations, schema, feature flags, secrets, persistence layers, sensitive-data paths) | Orchestrator at Conversation-Mode dispatch; deleted at task close |
-| `check-critical-write-allowlist.sh` | Edit/Write/MultiEdit targets a path NOT in the Critical-mode allowlist | Orchestrator at Critical-Mode dispatch; deleted at task close |
+| Client | Hook source | Required action | Guard decision |
+|---|---|---|---|
+| Claude Code | Project `.claude/settings.json` | Run `bin/code4me-install` | `ask` for user approval |
+| Codex | Plugin-bundled `hooks/hooks.json` | Trust with `/hooks` | `deny` with an actionable explanation |
 
-## Setup
+Codex uses `deny` because its PreToolUse API does not support Claude's `ask` decision. Missing state files pass through silently in both clients.
 
-**Recommended: run the installer instead of editing by hand.** `bash <PLUGIN_DIR>/bin/code4me-install --project <your-project>` self-locates the plugin, writes the correct absolute paths, and merges idempotently (no duplicates, stale paths replaced). Use `--with-lsp` only for legacy LSP setup. Use `--dry-run` to preview; it backs up to `.bak`. The manual steps below are the fallback if you'd rather wire it yourself.
+## Claude Code
 
-Add the following to your project's `.claude/settings.json` (or merge into the existing `hooks` block). Replace `<PLUGIN_DIR>` with the absolute path to this plugin's checkout:
+From the code4me checkout, install or refresh the project hooks:
 
-```json
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash <PLUGIN_DIR>/hooks/check-test-protection.sh"
-          },
-          {
-            "type": "command",
-            "command": "bash <PLUGIN_DIR>/hooks/check-forbidden-conditions.sh"
-          },
-          {
-            "type": "command",
-            "command": "bash <PLUGIN_DIR>/hooks/check-critical-write-allowlist.sh"
-          }
-        ]
-      }
-    ]
-  }
-}
+```bash
+bash bin/code4me-install --project /absolute/path/to/project
 ```
 
-If the plugin lives at `~/.claude/plugins/code4me/`, point at `~/.claude/plugins/code4me/hooks/...`. If you cloned elsewhere, point at that path. Use absolute paths — `~` and environment-variable expansion in hook commands is fragile across shells.
+The installer self-locates the plugin, backs up `.claude/settings.json` to `.bak`, removes stale code4me entries, and writes current absolute paths without disturbing unrelated settings or hooks. It is safe to rerun after moving or updating the plugin.
 
-`/code4me-init` (the scaffolder) handles this automatically when copying `claude-settings.json.example` and substituting `<PLUGIN_DIR>`. If you're installing the hooks manually after the fact, copy the snippet above instead.
+Preview without writing:
 
-## When NOT to use a specific hook
+```bash
+bash bin/code4me-install --project /absolute/path/to/project --dry-run
+```
 
-- **`check-test-protection.sh`** — no-op without a populated `.code4me/protected-tests.txt`. Free to leave installed; never fires until Spec-to-Test writes the manifest. Remove only if you have an external test-protection mechanism that would double-prompt.
-- **`check-forbidden-conditions.sh`** — fires only during Conversation Mode dispatches. Free to leave installed on Standard/Critical-only workflows.
-- **`check-critical-write-allowlist.sh`** — no-op without `.code4me/critical-allowlist.txt`. Free to leave installed on Conversation/Light/Standard-only workflows. Fires only when the orchestrator has written an active allowlist at Critical dispatch.
+Legacy LSP configuration is separate and opt-in. Add `--with-lsp` only when codegraph and CocoIndex do not cover the project's source-navigation needs.
 
-## Verifying
+`/code4me-init` does not install hooks.
 
-Three probes exercise the hook paths. Run them after installation:
+## Codex
 
-- `probes/hooks/01-test-protection-hook-fires.md`
-- `probes/hooks/02-forbidden-conditions-hook-fires-conversation-mode.md`
-- `probes/hooks/03-critical-write-allowlist-hook-fires.md`
+Codex loads the required hooks from the installed plugin. Do not create `.codex/hooks.json` or substitute plugin paths manually.
 
-Each probe walks you through dispatching a scenario, observing the hook's `permissionDecision: ask` return, and verifying the developer subagent maps the gate to the correct typed outcome (TEST_QUESTION / FORBIDDEN_CONDITION_ENCOUNTERED / OUT_OF_SCOPE_TARGET).
+After installing or updating code4me, start Codex and run:
 
-If a hook doesn't fire when expected, the most likely cause is the corresponding state file not being written by the orchestrator at the appropriate workflow gate. Check `.code4me/` to confirm.
+```text
+/hooks
+```
 
-## What each typed outcome means
+Review and trust the code4me hook definition. Codex skips untrusted hooks and asks for review again when their hash changes.
 
-| Hook fires | Developer returns | Orchestrator routes |
+## Guards
+
+| Hook | Protects | Active state |
 |---|---|---|
-| `check-test-protection.sh` | `outcome: TEST_QUESTION` with test name + issue + proposed interpretation | to Spec-to-Test |
-| `check-forbidden-conditions.sh` | `outcome: FORBIDDEN_CONDITION_ENCOUNTERED` with the specific condition | escalates weight to Standard |
-| `check-critical-write-allowlist.sh` | `outcome: OUT_OF_SCOPE_TARGET` with path + non-matching patterns | surfaces re-scope vs. reject to user; on re-scope, routes to Lead Architect for amendment + updates `.code4me/critical-allowlist.txt` + increments Scope Change Limit counter |
+| `check-test-protection.sh` | Tests authored by Spec-to-Test | `.code4me/protected-tests.txt` |
+| `check-forbidden-conditions.sh` | Conversation-Mode scope boundaries | `.code4me/forbidden-conditions.json` |
+| `check-critical-write-allowlist.sh` | Critical-Mode write scope | `.code4me/critical-allowlist.txt` |
+| `check-structural-first-on-source.sh` | codegraph/CocoIndex precedence over raw source searches | Source-search tool call |
 
-Each hook is a real protocol bridge between the runtime tool boundary and the dispatch flow — not just a permission prompt. The orchestrator's response to a gate is what makes the workflow correct; the hook just prevents the wrong action from happening silently.
+The first three guards are dormant when their state file is absent. The structural-first guard remains active and redirects source discovery toward structural indexes.
 
-## Symmetry across vendors (v0.9+)
+## Verify
 
-The hooks fire on Claude Code's tool calls. Codex runs in a subprocess whose tool calls don't pass through Claude Code's hook system. As of v0.9, the `codex-developer` shim's implement-mode validation pre-screens Codex's `files_touched` against:
+Initialize the project, then run:
 
-- `.code4me/protected-tests.txt` → BLOCKS with `blocker_type: test_protection_violation`
-- `.code4me/critical-allowlist.txt` (when present) → BLOCKS with `blocker_type: out_of_scope_target`
+```text
+/code4me-preflight
+```
 
-So the same protections apply whether you dispatch the Claude-side developer or the codex-developer shim. The protocol is symmetric; the mechanism differs (hook vs. shim post-validation).
+Claude preflight verifies project hook registration and path resolution. Codex preflight verifies the bundled hook manifest and adapter. For focused repository tests:
+
+```bash
+bash tests/hooks/test-codex-hooks.sh
+bash tests/hooks/test-windows-paths.sh
+```
+
+On Windows, run installers and tests from Git Bash or WSL. Native PowerShell-only and `cmd.exe` environments are not supported.
+
+When a guard fires, fix or explicitly revise the relevant `.code4me` policy before retrying. Claude can surface an approval prompt; Codex blocks the call because it cannot pause for an `ask` decision.

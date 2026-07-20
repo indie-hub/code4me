@@ -10,18 +10,22 @@ cd code4me
 bash bin/code4me-install-deps --check
 ```
 
-In the target project, run `/code4me-init`. Under Codex it previews and creates only `AGENTS.md` and `.code4me/`; MCPs remain installer-owned and hooks come from the plugin bundle.
-
-Expose this checkout as a Codex plugin so Codex can read `.codex-plugin/plugin.json`. Then install the common optional tools you want:
+Install it through the Codex plugin marketplace:
 
 ```bash
-bash bin/code4me-install-deps --install core
-bash bin/code4me-install-deps --install memory
-bash bin/code4me-install-deps --install indexes
-bash bin/code4me-install-deps --configure-mcp codex
+codex plugin marketplace add indie-hub/code4me
+codex plugin add code4me@code4me-marketplace
+```
+
+Then install the common integrations and configure their MCP/plugin entries:
+
+```bash
+bash bin/code4me-install-deps --install core --install memory --install indexes --configure-mcp codex
 ```
 
 The configuration step registers Basic Memory and CocoIndex, delegates codegraph registration to `codegraph install`, and installs context-mode through the Codex plugin marketplace when no conflicting manual entry exists. Follow the checklist printed at the end, then restart Codex.
+
+In the target project, run `/code4me-init`. Under Codex it previews and creates only `AGENTS.md` and `.code4me/`; MCPs remain installer-owned and hooks come from the plugin bundle.
 
 Start Codex in the target project and ask it to use code4me for the milestone:
 
@@ -58,10 +62,10 @@ Review and trust the current code4me hook definition. Codex skips untrusted plug
 
 ## Preflight
 
-From the plugin checkout:
+From the target project, inside Codex:
 
-```bash
-bash bin/code4me-preflight
+```text
+/code4me-preflight
 ```
 
 Missing optional tools degrade gracefully. Basic Memory, codegraph, CocoIndex, and `claude-p` improve the workflow but are not required for simple code4me operation. The bundled Codex hooks are part of the core workflow.

@@ -14,7 +14,7 @@ No Task-tool subagent is spawned. The orchestrator is already executing — it p
 Only when **one** of the following is true:
 
 1. The user named a specific Codex role at intake — e.g., "use codex-architect for this", "have codex-developer implement this", "let codex do the security review."
-2. The user enabled cross-vendor pairing for this milestone — the words "cross-vendor", "alternation", "alternation policy", or the `--cross-vendor` flag on `/code4me-dispatch`, OR a project-level cross-vendor default declared in `CLAUDE.md`.
+2. The user enabled cross-vendor pairing for this milestone — the words "cross-vendor", "alternation", "alternation policy", or the `--cross-vendor` flag on `/code4me-dispatch`, OR a project-level cross-vendor default declared in `AGENTS.md` or `CLAUDE.md`.
 
 Inferring "Codex would be a good fit here" from the work's nature, the auto-escalation symptom list, or the team-template's pairing column is a workflow violation per the orchestrator's **Codex shim dispatch gate** in `skills/code4me/SKILL.md`. When uncertain whether the user wants Codex, surface as `NEEDS_DECISION` and ask.
 
@@ -78,9 +78,9 @@ For each role × mode dispatch, the orchestrator:
    - `forbidden_condition_violation` → BLOCKED
    - `unexpected_modification` → BLOCKED with role-specific framing ("role was dispatched read-only; subprocess modified file unexpectedly")
 
-   If `skipped: true` (no git, or not a git repo), log the skip in the dispatch log (`layer_c_skipped: true` field) and proceed. Layer C requires git; without git, this layer is a no-op — Claude-side hooks (Layer A) and codex/reasonix-side hooks (Layer B, when wired) still cover what they can.
+   If `skipped: true` (no git, or not a git repo), log the skip in the dispatch log (`layer_c_skipped: true` field) and proceed. Layer C requires git; without git, this layer is a no-op. Client hooks still cover calls made by the active orchestrator, but separately spawned bridge processes may not inherit that trusted hook context.
 
-   **Why post-validation, not pre-validation.** Codex runs as a subprocess; Claude Code's PreToolUse hooks don't fire inside it. Codex's own PreToolUse hooks are Bash-only and not currently wired by code4me (Layer B is ear-tagged but not built). Layer C catches anything that landed on disk regardless of what the response claims. Deterministic; can't be lied about. The trade-off: violations are caught *after* the touch (rolled back by the user), not before.
+   **Why post-validation, not pre-validation.** A bridge subprocess does not reliably inherit the active orchestrator's trusted hooks. Layer C catches anything that landed on disk regardless of the client or what the response claims. The trade-off is that violations are caught *after* the touch and must be reverted by the user.
 
 6. **Uses the result inline.** The orchestrator now has Codex's output as structured data, *and* a clean Layer C diff scan. For Co-Approval: compare with the Claude-side architect's `approved` field. For alternation: record both sides' findings. For scope-expansion: route as appropriate. The orchestrator's existing workflow logic consumes the result the same way it would consume a subagent return payload.
 
@@ -101,7 +101,6 @@ For each role × mode dispatch, the orchestrator:
      "escalation_trigger": "<symptom or null>",
      "vendor_pairing": {...},
      "context_provenance": [...],
-     "spec_kit_interop": <bool>,
      "layer_c_status": "<clean|violation|skipped>",
      "layer_c_violations": [<violation_type>, ...]
    }

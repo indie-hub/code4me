@@ -14,7 +14,7 @@ The substantial reference content for code4me, organized for lookup rather than 
 
 The orchestrator enforces an **auto-escalation override**: if the work touches authentication, sensitive data, cross-cutting concerns, new external dependencies, or any other listed symptom class, the weight is escalated to at least Standard regardless of what you declared. This is deliberate and non-negotiable.
 
-**Solo execution mode (v0.13+)** is orthogonal to weight: on explicit request only ("solo" at intake, `--solo` flag, or `CLAUDE.md` default), the orchestrator implements Conversation/Light/Standard tasks inline, always dispatching one fresh-context gate (Combined Reviewer, or Verification for Standard). Critical never runs solo; escalation and architecture floors still dispatch. Full rules: `skills/code4me/references/solo-mode.md`.
+**Solo execution mode (v0.13+)** is orthogonal to weight: on explicit request only ("solo" at intake, `--solo` flag, or an `AGENTS.md`/`CLAUDE.md` project default), the orchestrator implements Conversation/Light/Standard tasks inline, always dispatching one fresh-context gate (Combined Reviewer, or Verification for Standard). Critical never runs solo; escalation and architecture floors still dispatch. Full rules: `skills/code4me/references/solo-mode.md`.
 
 Full symptom-class list: `skills/code4me/references/auto-escalation.md`. Detailed weight definitions: `skills/code4me/references/workflow-weights.md`.
 
@@ -27,7 +27,7 @@ User (Product Owner)
 Producer
    │  intake → classify → auto-escalate
    ▼
-Product Coach   (optional, Standard/Critical; skipped when Spec Kit interop is active)
+Product Coach   (optional, Standard/Critical)
    │
    ▼
 Lead Architect  ⇄  Challenger Architect    ── Co-Approval Rule (both: approved=true)
@@ -50,9 +50,9 @@ Release                                     ── Critical: + post-release QA +
 
 Conversation Mode collapses this to: Producer → Developer → Combined Reviewer (loop on REWORK). Light Mode adds an architect-notify (non-blocking) before Developer.
 
-## Available subagents (15 total)
+## Agent roles and vendor bridges
 
-Claude-side:
+The plugin defines 12 native agent roles:
 
 - `developer` — implements code changes per the spec or Conversation Note
 - `combined-reviewer` — single combined-pass reviewer for Conversation and Light Mode
@@ -67,17 +67,17 @@ Claude-side:
 - `product-coach` — optional systematic-intake helper for Standard/Critical
 - `security-reviewer` — OWASP-Top-10 + STRIDE security pass; fires automatically on auto-escalation symptom classes
 
-Codex shims (opt-in; see `docs/howto-enable-codex.md`):
+The Codex and DeepSeek bridges can execute seven of those contracts through an external vendor CLI:
 
-- `codex-architect` — three modes (`challenge`, `consult`, `review-spec`); cross-vendor co-architecture
-- `codex-developer` — three modes (`implement`, `review-diff`, `spike`); cross-vendor implementation
-- `codex-code-reviewer` — three modes (`review-diff`, `review-files`, `review-spec-fit`)
-- `codex-spec-to-test` — two modes (`generate`, `review-test-spec`)
-- `codex-security-reviewer` — two modes (`diff-focused`, `comprehensive`)
-- `codex-verification` (v0.8+) — two modes (`suite-run`, `ac-coverage`)
-- `codex-lead-architect` (v0.8+) — two modes (`propose`, `amend`)
+- `architect` — three modes (`challenge`, `consult`, `review-spec`); cross-vendor co-architecture
+- `developer` — three modes (`implement`, `review-diff`, `spike`); cross-vendor implementation
+- `code-reviewer` — three modes (`review-diff`, `review-files`, `review-spec-fit`)
+- `spec-to-test` — two modes (`generate`, `review-test-spec`)
+- `security-reviewer` — two modes (`diff-focused`, `comprehensive`)
+- `verification` — two modes (`suite-run`, `ac-coverage`)
+- `lead-architect` — two modes (`propose`, `amend`)
 
-`codex-qa` and `codex-researcher` do not exist by design — QA and Researcher stay Claude-only.
+These are bridge role surfaces, not additional files under `agents/`. See `docs/howto-enable-codex.md` and `docs/howto-enable-deepseek.md`. QA, Researcher, Product Coach, Combined Reviewer, and Doc Writer remain native-only.
 
 ## Slash commands
 
@@ -126,7 +126,7 @@ See `docs/howto-enable-cross-vendor.md` for the operational walkthrough.
 
 ## Runtime hooks
 
-Three opt-in PreToolUse hooks; all return `permissionDecision: ask` (never `deny`); silent pass-through when state file is absent. See `docs/howto-install-hooks.md` for installation.
+Three state-backed PreToolUse guards plus structural-first routing ship with the plugin. Claude project hooks return `ask`; Codex's bundled adapter returns `deny` because Codex does not support `ask`. State-backed guards pass through when their state file is absent. See `docs/howto-install-hooks.md`.
 
 | Hook | Fires when | State file |
 |---|---|---|
@@ -134,7 +134,7 @@ Three opt-in PreToolUse hooks; all return `permissionDecision: ask` (never `deny
 | `check-forbidden-conditions.sh` | Conversation-Mode Write creates a forbidden new file | `.code4me/forbidden-conditions.json` |
 | `check-critical-write-allowlist.sh` (v0.8+) | Critical-Mode Edit/Write outside the allowlist | `.code4me/critical-allowlist.txt` |
 
-Symmetric across vendors as of v0.9: the codex-developer shim's implement-mode validation pre-screens `files_touched` against the protected-tests and critical-allowlist files, so Codex-side dispatches respect the same protections even though they don't pass through Claude Code's hook system.
+Interactive Claude and Codex sessions use the same guard scripts through client-specific adapters. Bridge subprocesses also receive a post-run diff scan because they may not inherit the active client's trusted hook context.
 
 ## Audit and analytics (v0.8+)
 
@@ -174,8 +174,7 @@ One line per Task-tool dispatch in `.code4me/dispatch-log.jsonl`:
   "mode": "<mode or null>", "outcome": "<outcome>",
   "escalation_trigger": "<symptom class or null>",
   "vendor_pairing": {"policy": "...", "pair_role": "...", "alternates_with": "...", "degraded": "..."},
-  "context_provenance": [{"query_kind": "...", "query_descriptor": "...", "resolved_artifact": "...", "resolved_sha": "...", "skipped": <bool>}, ...],
-  "spec_kit_interop": <bool>
+  "context_provenance": [{"query_kind": "...", "query_descriptor": "...", "resolved_artifact": "...", "resolved_sha": "...", "skipped": <bool>}, ...]
 }
 ```
 
@@ -184,7 +183,6 @@ Field provenance:
 - v0.6: base fields (ts, milestone, task, weight, subagent, vendor, model, mode, outcome, escalation_trigger)
 - v0.7: `model_tier`, `default_tier`, `tier_deviated_from_default`, `vendor_pairing`
 - v0.8: `context_provenance`
-- v0.9: `spec_kit_interop`
 - v0.10.4: `trivial_justification` (Trivial entries only; `subagent: "orchestrator-inline (trivial)"`)
 - v0.13: `execution_mode` (`"solo"` on all entries of a solo task), `solo_requested_via`, `solo_justification` (solo implementation entries only; `subagent: "orchestrator-inline (solo)"`)
 - v0.14: `effort`, `default_effort`, `effort_deviated_from_default`, `effort_source`, `effort_applied`
@@ -220,7 +218,6 @@ code4me/
 │           ├── model-selection.yaml      # machine-readable tier defaults (v0.7+)
 │           ├── vendor-models.yaml        # vendor → tier → model (v0.7+)
 │           ├── cross-vendor-policy.md    # alternation rule (v0.7+)
-│           ├── spec-kit-interop.md       # Spec Kit consumption (v0.9+)
 │           ├── canonical-workflow.md
 │           ├── canonical-artifacts.md
 │           ├── release.md
@@ -230,12 +227,12 @@ code4me/
 │               ├── swift.md
 │               ├── cpp.md
 │               └── python.md
-├── agents/                         # 15 subagents (8 Claude-side + 7 Codex shims)
+├── agents/                         # 12 native agent-role definitions
 ├── templates/
 │   ├── conversation_note.md
 │   ├── .code4me-skeleton/          # runtime working dir scaffold
 │   └── project-starter/            # project-conventions starter (v0.7+)
-├── hooks/                          # 3 opt-in PreToolUse hooks
+├── hooks/                          # shared Claude/Codex runtime guards and adapters
 │   ├── check-test-protection.sh
 │   ├── check-forbidden-conditions.sh
 │   └── check-critical-write-allowlist.sh  # v0.8+

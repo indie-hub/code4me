@@ -1,8 +1,8 @@
 # How to enable cross-vendor pairing (v0.7+)
 
-Cross-vendor pairing is the framework's most leveraged form of dialectic. Instead of substituting individual Codex shims one at a time, the alternation rule from `references/cross-vendor-policy.md` runs producer and verifier dispatches on opposite vendors across the entire milestone — wherever shims exist.
+Cross-vendor pairing is the framework's most leveraged form of dialectic. The alternation rule from `references/cross-vendor-policy.md` runs producer and verifier roles on opposite vendors across the milestone wherever a vendor bridge supports the role.
 
-Prereqs: Codex CLI installed and `OPENAI_API_KEY` set per `docs/howto-enable-codex.md`. Run `/code4me-preflight` to confirm.
+Prerequisites: configure at least one external vendor bridge per `docs/howto-enable-codex.md` or `docs/howto-enable-deepseek.md`, then run `/code4me-preflight`. Codex accepts `codex login` or `OPENAI_API_KEY`; DeepSeek uses Reasonix configuration.
 
 ## What the alternation rule does
 
@@ -36,9 +36,9 @@ Explicit, recorded in the audit trail. Recommended for one-off cross-vendor mile
 
 The orchestrator picks up "cross-vendor pairing" / "alternation policy" / "use the cross-vendor flow" as signals.
 
-### 3. Project-default in CLAUDE.md
+### 3. Project default
 
-In your project's `CLAUDE.md`, under a "Cross-vendor pairing" section:
+In the active client's project instructions (`AGENTS.md` for Codex or `CLAUDE.md` for Claude Code), add a "Cross-vendor pairing" section:
 
 ```markdown
 ## Cross-vendor pairing
@@ -57,12 +57,12 @@ A Standard milestone with cross-vendor enabled:
 
 The `(vendor:tier)` annotation remains the load-bearing model signal. The announcement also includes a separate effort summary; concrete model identifiers and effort-application status go in the dispatch log.
 
-## What happens when a shim is unavailable
+## What happens when a vendor bridge is unavailable
 
 The alternation rule degrades gracefully:
 
-- Codex CLI missing → the specific shim dispatch BLOCKs with `codex_cli_not_installed`; the orchestrator falls back to the anchor vendor and records `pairing_degraded: shim_unavailable` in the dispatch log entry.
-- `OPENAI_API_KEY` missing → same outcome, with `codex_auth_missing` as the blocker_type.
+- Codex CLI missing → the bridge returns `codex_cli_not_installed`; the orchestrator falls back to the anchor vendor and records a degraded pairing in the dispatch log entry.
+- Codex authentication failure → the bridge returns `codex_error`; authenticate with `codex login` or `OPENAI_API_KEY`, then retry when the selected role is required.
 - User opts out mid-milestone → the orchestrator honours the override for subsequent dispatches and records `pairing_degraded: user_override`.
 
 In all three cases the milestone proceeds. Cross-vendor benefit is degraded for that pair, not lost overall — same-vendor on both sides means the dialectic is missing but the verifier still runs.
@@ -78,7 +78,7 @@ The audit tool's "Cross-vendor pairing" section surfaces persistent degradations
 | user_override | 1 |
 ```
 
-Persistent `shim_unavailable` means a required shim is consistently missing — install it or remove cross-vendor pairing from the milestone intake.
+Persistent availability degradation means a required vendor CLI is consistently missing — install it or remove that vendor from the milestone's pairing configuration.
 
 ## When NOT to enable cross-vendor pairing
 
@@ -117,4 +117,4 @@ A first Standard milestone with cross-vendor:
 5. Let the milestone run. Each Codex dispatch will print pre-flight verification (CLI present, key set) before invoking.
 6. After the milestone closes, run `/code4me-audit` to see the vendor × tier rollup, any pairing degradations, and the cost characteristics.
 
-If degradations appear, address them (install the missing shim, or set the missing key) and re-run a similar milestone. Two clean runs is the empirical signal that the framework can be trusted to do cross-vendor on default Critical milestones.
+If degradations appear, address them (install or authenticate the missing vendor CLI) and re-run a similar milestone. Two clean runs is the empirical signal that the framework can be trusted to do cross-vendor on default Critical milestones.

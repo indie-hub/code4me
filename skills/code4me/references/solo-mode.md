@@ -41,11 +41,11 @@ Everything else is unchanged: bookkeeping under `.code4me/`, INSIGHT routing, tr
 
 ## Mechanical enforcement still applies (this is the point)
 
-Claude Code's PreToolUse hooks fire on the **orchestrator's own tool calls**. In solo mode this is the framework's structural answer to "the author can't be trusted to police itself":
+The active client's PreToolUse hooks fire on the **orchestrator's own tool calls**. In solo mode this is the framework's structural answer to "the author can't be trusted to police itself":
 
-- **Test protection.** `check-test-protection.sh` ask-gates the orchestrator's own edits to paths in `.code4me/protected-tests.txt`. In Standard solo the orchestrator writes that manifest *before* implementing (see below) — binding its own hands mechanically, not on the honor system.
+- **Test protection.** `check-test-protection.sh` guards the orchestrator's own edits to paths in `.code4me/protected-tests.txt`. In Standard solo the orchestrator writes that manifest *before* implementing (see below) — binding its own hands mechanically, not on the honor system.
 - **Forbidden conditions.** Conversation-solo writes `.code4me/forbidden-conditions.json` at task start exactly as dispatched Conversation Mode does; `check-forbidden-conditions.sh` gates the orchestrator's own file creation.
-- **A hook ask-gate firing on your own edit is an abort signal**, not an obstacle. Treat the gate as authoritative (ETHOS: fidelity); stop, surface what happened, and re-classify or re-scope.
+- **A hook guarding your own edit is an abort signal**, not an obstacle. Treat the gate as authoritative (ETHOS: fidelity); stop, surface what happened, and re-classify or re-scope.
 
 ## Per-weight procedure
 
@@ -96,7 +96,7 @@ Implementation work logs as:
  "vendor": "anthropic", "model": "<orchestrator's session model>",
  "outcome": "<outcome>",
  "execution_mode": "solo",
- "solo_requested_via": "user-keyword|flag|claude-md-default",
+ "solo_requested_via": "user-keyword|flag|project-instructions-default",
  "solo_justification": "<one-line scope statement, verbatim from the announcement>",
  "files_touched": ["..."]}
 ```
@@ -109,7 +109,7 @@ Abort solo — finish bookkeeping, announce, and dispatch the remainder normally
 
 1. **Scope growth.** The "and I also need to…" signal (same as Trivial). More files, more ACs, or an unplanned subsystem → abort, re-scope, dispatch.
 2. **Auto-escalation symptom discovered mid-implementation.** Stop immediately; the symptom's floor applies; dispatch the mandated team.
-3. **A protection hook ask-gates your own edit.** Treat as authoritative. Do not approve past your own gate.
+3. **A protection hook guards your own edit.** Treat it as authoritative. Do not bypass it.
 4. **Two consecutive gate FAILs.** Mirrors the Rework circuit breaker: if the retained gate fails the same work twice, the author needs replacing — dispatch a fresh Developer with the gate's findings as input.
 5. **Context budget pressure.** If the solo loop is visibly consuming the session's remaining context, checkpoint via `/code4me-housekeeping` and dispatch the remainder.
 
@@ -125,7 +125,6 @@ Aborts are logged as an INSIGHT (`impact: informational` unless a pattern emerge
 
 - **Cross-vendor pairing:** composes well, and is the recommended pairing for solo when enabled — run the retained gate on the *other* vendor (combined-reviewer or verification via codex-bridge / deepseek-bridge per `cross-vendor-policy.md`). Producer (orchestrator, Anthropic) and verifier (other vendor) land on opposite vendors, which is the alternation rule's intent. Same opt-in gate as always.
 - **Trello sync:** unchanged. Cards move through the same states; solo implementation entries appear in card descriptions like any dispatch.
-- **Spec Kit interop:** unchanged at intake.
 - **Basic Memory:** memory-first still applies before classifying or implementing when the MCP tools are available.
 - **Trivial:** unchanged and unaffected. Trivial is "no dispatch at all, whitelist-bounded"; solo is "implementation inline, gate dispatched, weight semantics intact". When a request is Trivial-eligible, classify Trivial — don't run solo for what the whitelist already covers.
 

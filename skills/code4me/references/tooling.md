@@ -113,7 +113,7 @@ Use context-mode after the source-code indexes for:
 
 Do not use context-mode as the first step for "where is symbol X?", "who calls
 Y?", or "what does this module do?" when codegraph or CocoIndex can answer.
-The structural-first hook ask-gates common context-mode source-search shapes.
+The structural-first hook guards common context-mode source-search shapes. Claude asks for approval; Codex denies the call with fallback guidance.
 
 ## Fallback Tools
 

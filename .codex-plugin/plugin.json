@@ -1,6 +1,6 @@
 {
   "name": "code4me",
-  "version": "0.15.3-dev",
+  "version": "0.15.4-dev",
   "description": "Multi-agent SDLC orchestration with workflow weights, quality gates, independent model/effort routing, optional vendor bridges, and supervised improvement experiments.",
   "author": {
     "name": "Bruno"

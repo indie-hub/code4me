@@ -1,6 +1,6 @@
 # Tutorial: your first code4me milestone
 
-A 10-minute walkthrough from "I just installed the plugin" to "I closed a Conversation Mode task." Assumes Claude Code is installed and you've added code4me to your plugin directory.
+A 10-minute walkthrough from "I just installed the plugin" to "I closed a Conversation Mode task." Assumes Claude Code or Codex is installed and code4me has been added through that client's plugin marketplace.
 
 ## What you'll do
 
@@ -13,7 +13,7 @@ If everything goes well, you'll have a working `.code4me/` directory, one Conver
 
 ## Prereqs
 
-- Claude Code installed and the code4me plugin enabled. Confirm with: in a Claude Code session, type `/code4me-` and see if any commands autocomplete. If yes, the plugin is loaded.
+- Claude Code or Codex installed with the code4me plugin enabled. In a client session, type `/code4me-` and confirm that commands autocomplete.
 - A project directory you're comfortable making a small reversible edit in. A throwaway scratch repo is fine.
 - Run `/code4me-preflight` first if you want a quick environment sanity check. Warnings are fine; FAIL is not.
 
@@ -89,7 +89,7 @@ In ten minutes, you've used:
 - `/code4me-audit` (dispatch-log analytics)
 - `/code4me-promote-or-revert` (Conversation Mode close)
 
-Plus the runtime hooks if you wired them in `step 1` — though Conversation Mode work usually doesn't trip them. They'd fire on larger changes (`check-forbidden-conditions.sh` on schema/migration/auth changes; `check-test-protection.sh` on attempted protected-test edits in Standard mode; `check-critical-write-allowlist.sh` on out-of-scope edits during Critical milestones).
+Plus the runtime hooks installed during setup — though Conversation Mode work usually doesn't trip them. They'd fire on larger changes (`check-forbidden-conditions.sh` on schema/migration/auth changes; `check-test-protection.sh` on attempted protected-test edits in Standard mode; `check-critical-write-allowlist.sh` on out-of-scope edits during Critical milestones).
 
 ## What to try next
 
@@ -98,4 +98,4 @@ Plus the runtime hooks if you wired them in `step 1` — though Conversation Mod
 - **Cross-vendor pairing** — invoke as `/code4me-dispatch Standard --cross-vendor <task>` to enable the alternation rule from `docs/howto-enable-cross-vendor.md`. Requires the Codex CLI setup from `docs/howto-enable-codex.md`.
 - **Critical Mode** — high-stakes work (auth, payments, data migration) triggers auto-escalation; runs the full team plus extra QA and user sign-off; the `check-critical-write-allowlist.sh` hook constrains edits to the Tech Spec's declared scope.
 
-Most of the docs from here on are reference and how-to. Start with `docs/reference.md` for the substantial reference content; `docs/explanation.md` for the design-decision rationales (why four weights, why Co-Approval, why orchestrator-as-skill).
+Most of the docs from here on are reference and how-to. Start with `docs/reference.md` for the substantial reference content; `docs/explanation.md` for the design-decision rationales (why five weights, why Co-Approval, why orchestrator-as-skill).

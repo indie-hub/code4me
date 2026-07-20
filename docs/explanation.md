@@ -2,18 +2,19 @@
 
 The design-decision rationale behind code4me. Useful for understanding *why* the framework is shaped the way it is — particularly when you're tempted to change something and want to know what invariant you'd be breaking.
 
-## Why four workflow weights, not two or eight?
+## Why five workflow weights, not two or eight?
 
 Two weights (light / heavy) underfit real work: there are reversible quick changes that don't warrant architects, and there are full-team Standard milestones that don't warrant the extra Critical scrutiny. Eight or more weights overfit: the user spends more energy classifying than the framework saves on dispatch.
 
-Four covers the actual signal:
+Five covers the actual signal without forcing tiny maintenance into a multi-agent workflow:
 
+- **Trivial** for whitelist-bounded, single-file maintenance with no behaviour change and no subagent dispatch.
 - **Conversation** for reversible work where the cost of "wrong" is low because rollback is cheap.
 - **Light** for pattern-following work where an architect's notify is enough to keep architecture consistent without slowing the loop.
 - **Standard** as the default — the full canonical workflow.
 - **Critical** for high-stakes work where the cost of "wrong" is high enough to warrant extra QA and explicit user sign-off.
 
-The four weights pair cleanly with the model tier defaults (`low` / `mid` / `mid+high architects` / `high`) so the cost surface scales with the stakes. If a Conversation task seems to want `high`, the weight is probably wrong — escalate the weight, don't overpower the model. That consistency check is one of the framework's strongest invariants.
+The weights and model profiles are related but independent. Weight selects workflow rigor; profile and effort select model capability within that workflow. Trivial does not dispatch, Conversation and Light usually stay economical, and Standard/Critical add stronger roles and floors. If a Conversation task seems to require Critical-level reasoning, reconsider the classification before simply overpowering the model.
 
 ## Why the auto-escalation override?
 
@@ -37,7 +38,7 @@ The orchestrator is a coordination role, not a doer role. The Producer's job is 
 
 The pattern matters because role-boundary discipline is what makes the audit trail readable. When an architectural mistake surfaces in QA, you can trace it back to the Lead Architect's Tech Spec, the Challenger's review, and the Co-Approval. When a test integrity violation surfaces, you can trace it to the Spec-to-Test handoff and the Developer's response. The dispatch log + the canonical artifacts + the structured return payloads together form a trace that survives across sessions.
 
-Collapsing the orchestrator into "Claude does everything" loses the trace. The framework's value isn't the model; it's the protocol the model operates within.
+Collapsing the orchestrator into "one agent does everything" loses the trace. The framework's value isn't the model; it's the protocol the model operates within.
 
 ## Why solo mode, when the Producer pattern says "coordinate, don't do"? (v0.13+)
 
@@ -45,7 +46,7 @@ Solo mode looks like a contradiction of the previous section. It isn't — it's 
 
 The concession: for small-to-medium, well-understood tasks, a single capable agent in a tight implement-test-fix loop beats the dispatch pipeline on speed and cost. The handoffs that make the trace readable also lose information and burn tokens. Forcing every two-file change through Developer + reviewer dispatch is process for its own sake — exactly what the weight system exists to avoid.
 
-The boundary: solo keeps the two controls that a pure loop structurally cannot provide. First, **author ≠ reviewer** — every solo diff meets one fresh-context gate (Combined Reviewer, or Verification for Standard) that didn't write the code and doesn't share its blind spots. Second, **mechanical self-binding** — the PreToolUse hooks fire on the orchestrator's own edits, so in Standard solo the orchestrator writes the test gate and `protected-tests.txt` *before* implementing, and is then ask-gated by its own hook against weakening it. The most insidious failure mode of looped agents — quietly gaming their own tests — stays structurally blocked.
+The boundary: solo keeps the two controls that a pure loop structurally cannot provide. First, **author ≠ reviewer** — every solo diff meets one fresh-context gate (Combined Reviewer, or Verification for Standard) that didn't write the code and doesn't share its blind spots. Second, **mechanical self-binding** — the PreToolUse hooks fire on the orchestrator's own edits, so in Standard solo the orchestrator writes the test gate and `protected-tests.txt` *before* implementing, and is then guarded against weakening it. Claude asks for approval; Codex blocks the call with an explanation. The most insidious failure mode of looped agents — quietly gaming their own tests — stays structurally blocked.
 
 Solo is also explicit-entry only (the same opt-in discipline as cross-vendor pairing) and never available for Critical. The trace survives in reduced form: solo entries log with `subagent: "orchestrator-inline (solo)"`, a mandatory `solo_requested_via`, and the gate's structured return. You trade trace richness for loop speed, knowingly, on the work where the trade is favourable — and the audit tool watches the solo share and gate-FAIL rate to catch the cases where it wasn't.
 
@@ -56,7 +57,7 @@ v0.5 had one imperative list (in the playbook) for what every dispatch needed: t
 Declarative `context_queries:` (v0.6+) moves the requirements per-agent. Each agent declares what *it* needs; the orchestrator resolves and assembles. The wins:
 
 - **Audit trail.** When a dispatch goes wrong, the orchestrator's transparency announcement lists what was in the Context Pack and what was skipped (with reasons). The declarative form makes that traceable.
-- **Mode and weight awareness.** Codex shims have mode-specific context needs; Conversation Mode developers need forbidden-conditions but Standard developers don't. `when:` conditions make these explicit without branch-heavy orchestrator code.
+- **Mode and weight awareness.** Vendor bridge roles have mode-specific context needs; Conversation Mode developers need forbidden-conditions but Standard developers don't. `when:` conditions make these explicit without branch-heavy orchestrator code.
 - **Provenance (v0.8+).** Each resolved query records the artifact + SHA that answered it. "Why did the developer not see the latest amendment?" is now a `jq` query against the dispatch log, not a transcript dig.
 
 The cost is one block of YAML per agent file. The benefit is that the Context Pack is inspectable, declarative, and version-controlled with the agent that needs it.
@@ -80,10 +81,10 @@ Tests are an executable spec. Once Spec-to-Test has produced them, modifying the
 The rule is enforced at three layers:
 
 - **Prompt-level** in the Developer subagent's directive: "Tests produced by Spec-to-Test are protected artifacts. Your job is to make the implementation pass the tests, not the tests pass the implementation."
-- **Runtime** via the `check-test-protection.sh` hook, which ask-gates Edit/Write tool calls targeting paths in `.code4me/protected-tests.txt`.
-- **Shim** via the codex-developer's implement-mode validation, which BLOCKs with `test_protection_violation` if Codex's `files_touched` contains a protected path.
+- **Runtime** via the `check-test-protection.sh` hook, which guards writes targeting paths in `.code4me/protected-tests.txt`.
+- **Bridge post-validation** via the diff scanner, which BLOCKs with `test_protection_violation` if a subprocess touched a protected path.
 
-If the Developer thinks a test is wrong, the protocol is to return `outcome: TEST_QUESTION` — route the question through the orchestrator to Spec-to-Test. The hook firing is the structural enforcement of that protocol; if it ask-gates an Edit, the right response is `TEST_QUESTION`, not "approve past."
+If the Developer thinks a test is wrong, the protocol is to return `outcome: TEST_QUESTION` — route the question through the orchestrator to Spec-to-Test. The hook firing is the structural enforcement of that protocol; the right response is `TEST_QUESTION`, not bypassing the guard.
 
 ## Why cross-vendor pairing is opt-in per milestone
 
@@ -93,15 +94,13 @@ Per-milestone opt-in lets the user make that call when they have the most contex
 
 Auto-escalation does NOT force cross-vendor on. Critical milestones still default to single-vendor unless the user opts in. This is intentional: cross-vendor is the kind of safety that benefits from user awareness; making it implicit makes the cost surprise.
 
-## Why the runtime hooks ask, never deny
+## Why hook decisions differ between Claude and Codex
 
-Three reasons:
+The workflow intent is the same: stop a guarded action and explain which policy needs attention. The client APIs expose different decisions.
 
-1. **Graceful degradation.** A misconfigured hook should warn, never block. If the orchestrator wrote a malformed state file, the user shouldn't be locked out of edits — they should see the warning and decide.
-2. **User override is sometimes correct.** There are legitimate cases where the user has context the hook doesn't (a test that genuinely needs to be modified after authorisation; a Conversation Mode forbidden condition tripped by a path that's actually safe in this context). `ask` preserves the user's authority; `deny` would force a workaround.
-3. **The hook is part of a protocol, not a security boundary.** The protocol is: hook fires → developer maps to typed outcome → orchestrator routes appropriately. The hook is one step in that chain, not the enforcement boundary. The actual enforcement is in the subagent's typed return + the orchestrator's routing.
+Claude Code supports `permissionDecision: ask`, so the user can approve an exceptional action without disabling the hook. Codex PreToolUse supports `allow` and `deny`, not `ask`; the adapter therefore returns an actionable denial. The user resolves the condition or changes the relevant `.code4me` policy, then retries.
 
-If you want a hard deny on certain paths (e.g., production secrets), use a separate mechanism (gitignore + .gitleaks; CI guardrails). The code4me hooks are workflow gates, not security gates.
+Missing or inactive state files pass through, which keeps the guards scoped to the workflow that created them. These remain workflow controls rather than security boundaries; use repository and CI controls for secrets or immutable paths.
 
 ## Why probes instead of unit tests
 
@@ -120,28 +119,26 @@ Each file documents a single decision-time concern. The orchestrator loads what 
 
 The cost is more files. The benefit is that each file is reviewable in isolation: a change to `model-selection.md` doesn't risk breaking unrelated rules in the auto-escalation list.
 
-## Why no `codex-qa` or `codex-researcher`
+## Why vendor bridges do not cover every role
 
 QA's value is exploratory creativity (finding edge cases the spec didn't name). Researcher's value is desk-research synthesis (comparing approaches, finding prior art). Both benefit from prompt strategies more than from vendor diversity — the wins from cross-vendor are smaller here than at the gates (architect / spec-to-test / developer / reviewer / verifier / security).
 
-The framework can run cross-vendor on the high-leverage pairs and stay single-vendor on QA + Researcher without losing meaningful dialectic. Adding `codex-qa` and `codex-researcher` was on the original v0.9 plan as "Tier-3 reassessment pending live-test signal" but has been explicitly closed by user decision: QA and Researcher stay Claude-only.
+The framework uses vendor bridges for the high-leverage pairs and leaves QA, Researcher, Product Coach, Combined Reviewer, and Doc Writer on the orchestrator's native agent surface. This keeps the bridge contract smaller without losing meaningful dialectic at the quality gates.
 
-## Why the orchestrator runs on Opus
+## Why the orchestrator needs deliberate model and effort selection
 
-The orchestrator's classification, dispatch, escalation, and routing decisions propagate through the entire team. A cheap orchestrator misclassification cascades: wrong weight → wrong team → wrong tier → wrong models → wrong gates. Opus on the orchestrator is small relative to the cost of running a misassembled team on Sonnet.
+The orchestrator's classification, dispatch, escalation, and routing decisions propagate through the entire team. An underpowered choice can cascade: wrong weight → wrong team → wrong profile → wrong gates. That makes orchestration capability important, but it does not justify one fixed vendor, model, or maximum effort for every request.
 
-This is a recommendation, not a hard requirement — the user picks their session model. The README states the recommendation prominently. If you choose a lower tier for the orchestrator, expect more classification errors (and a noisier dispatch log).
+The current policy treats model profile and effort as independent choices. Use enough capability for the ambiguity and stakes, explain meaningful deviations, and keep vendor participation explicit. A clear Conversation task may need little effort; a Critical or architecturally ambiguous milestone may justify a frontier model and higher reasoning effort.
 
 ## What changes if you remove `ETHOS.md`?
 
-The ETHOS file documents the shared operating principles every subagent inherits: pacing (wrong work is more expensive than paused work), simplicity (prefer simple designs, verifiable work), role boundaries (orchestrator dispatches; subagents execute; PO decides), context (Basic Memory for durable prior knowledge; codegraph/CocoIndex for source lookup; MCPs/context-mode/fallbacks after that), fidelity (surface BLOCKED with typed reasons rather than reformatting), project guidance (project CLAUDE.md authoritatively overrides), user authority (PO is final on product behaviour), INSIGHT emission (route learnings upstream).
+The ETHOS file documents the shared operating principles every subagent inherits: pacing (wrong work is more expensive than paused work), simplicity (prefer simple designs, verifiable work), role boundaries (orchestrator dispatches; subagents execute; PO decides), context (Basic Memory for durable prior knowledge; codegraph/CocoIndex for source lookup; MCPs/context-mode/fallbacks after that), fidelity (surface BLOCKED with typed reasons rather than reformatting), project guidance (`AGENTS.md` in Codex or `CLAUDE.md` in Claude Code authoritatively overrides), user authority (PO is final on product behaviour), INSIGHT emission (route learnings upstream).
 
 Each individual subagent's role-specific directive sits on top of the ETHOS. If you remove ETHOS, every subagent file would need to re-encode those principles independently, and they'd drift. The shared file is the load-bearing consistency mechanism.
 
 ## Why the framework still ships at 0.x
 
-Because **no real milestone has run through it.** Every cut from v0.6.1 to v0.9.0-dev has been structural — the framework is theoretically excellent and empirically untested. The dispatch log is empty across all versions; the tier defaults are theory; the alternation degrade-fallback hasn't been exercised under load.
+Because its public workflow contracts are still evolving. Recent releases changed client ownership for init and hooks, added multiple vendor bridges and judge backends, and refined model/effort routing. Those are package-level behaviors that users and project automation depend on.
 
-The 1.0 release is the moment after the first Standard milestone (with cross-vendor enabled) and the first Critical milestone (with the full hook set) have run end-to-end. At that point the framework will have empirical signal to defend the choices it makes; until then it's a well-reasoned plan.
-
-This is intentional. Bumping to 1.0 before live-testing would be premature certainty.
+A 1.0 release should mean those interfaces are stable enough to support without frequent migration: installation and updates are repeatable on macOS and Windows Git Bash, Claude and Codex agree on project ownership, and representative Standard/Critical plus cross-vendor runs have accumulated enough evidence to freeze the contracts.

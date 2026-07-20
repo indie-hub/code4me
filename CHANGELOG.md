@@ -4,12 +4,13 @@ All notable changes to this plugin will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.15.3-dev] — in progress
+## [0.15.4-dev] — in progress
 
 ### Changed
 
 - `/code4me-init` is now client-aware and project-only: Codex gets `AGENTS.md`, Claude Code gets `CLAUDE.md`, and both get `.code4me/`. Init no longer duplicates installer ownership by creating MCP, hook, or LSP configuration.
 - Codex hooks are now a required plugin-bundled surface instead of an optional project template. A Codex adapter checks every path in `apply_patch` payloads and maps unsupported `ask` gates to actionable denies; Claude keeps its existing approval prompts.
+- Installation and hook documentation now provides one complete Claude/Codex setup flow, and the retired external specification workflow has been removed from guidance, probes, and history.
 
 ## [0.15.2-dev]
 
@@ -609,7 +610,7 @@ A fifth workflow weight — **Trivial** — and its supporting policy. Carves ou
   - **Orchestrator behaviour in Trivial mode**: announce → direct Edit → dispatch-log entry with `subagent: "orchestrator-inline (trivial)"` + `trivial_justification` field → tracker update → no `PROVISIONAL` tag, no smoke test, no Combined Reviewer → report to user with explicit "verify visually" disclaimer.
   - **Abort conditions**: if mid-edit the orchestrator finds itself thinking *"and I also need to..."*, that's the abort signal — escalate to Conversation. Auto-escalation symptoms (auth, sensitive-data, migration, new dep) override Trivial unconditionally.
   - **Anti-drift safeguards**: (1) whitelist is short and concrete; (2) justification mandatory and audit-tool-surveilled; (3) probe 10 exercises edge cases.
-  - **Composition** with auto-escalation, hooks, OpenWolf cerebrum, cross-vendor pairing (N/A), Spec Kit interop (N/A), Trello sync (applies normally).
+  - **Composition** with auto-escalation, hooks, OpenWolf cerebrum, cross-vendor pairing (N/A), and Trello sync (applies normally).
   - **When NOT to use Trivial**: if 30%+ of work is Trivial by the rules, you have a tooling gap (linter, version bumper, template) — automate the underlying need rather than route systematic small changes through code4me.
 - **`probes/classification/10-trivial-vs-conversation.md`** — five-scenario probe exercising the Trivial/Conversation boundary:
   1. Clear Trivial — typo fix → expect Trivial classification.
@@ -900,7 +901,7 @@ Both are real bugs but lower-priority than the auth + dispatch-gate fixes. Will 
 Two cuts so far:
 
 1. **Gap-closing + cleanup** — closes the v0.8 codex-developer allowlist asymmetry; softens Playwright to disabled-by-default in the recommended MCP starter.
-2. **Workflow integrations + Diataxis docs split** — Spec Kit interop at intake, pre-flight sanity-check script + slash command, the 430-line monolithic README split into Diataxis quadrants under `docs/`, plus discipline docs for probe-baselines and trace-review.
+2. **Workflow integrations + Diataxis docs split** — pre-flight sanity-check script + slash command, the 430-line monolithic README split into Diataxis quadrants under `docs/`, plus discipline docs for probe-baselines and trace-review.
 
 ### Added
 
@@ -926,7 +927,6 @@ The Playwright softening is straightforward: the v0.7 starter shipped with Playw
 
 ### Added (workflow + docs cut)
 
-- **Spec Kit interop (E1)** — `skills/code4me/references/spec-kit-interop.md` defines how the orchestrator detects and consumes [GitHub Spec Kit](https://github.com/github/spec-kit) artifacts at intake. When `specs/<feature>/spec.md` is present, it's consumed as the Milestone Spec (Product Coach skipped — the spec is already done). When `specs/<feature>/plan.md` is present, it's forwarded to the Lead Architect as draft input; Challenger Architect (or `codex-architect`) runs the soundness review; the architecture-discussion + Co-Approval flow proceeds normally. Provenance recorded at `.code4me/milestone-specs/{milestone_id}-source.md` (path + git blob SHA, not a copy). Dispatch log entries gain `spec_kit_interop: true`. Transparency announcement prefixed with `**Inputs**:` line citing the consumed Spec Kit paths. Probe `probes/classification/09-spec-kit-interop.md` verifies the interop fires correctly.
 - **Pre-flight sanity checks (F2)** — `bin/code4me-preflight` runs eight checks: `.code4me/` working directory present and writable; hooks installed in `.claude/settings.json` (all three hook scripts referenced); LSP enabled via `ENABLE_LSP_TOOL=1`; plugin `.lsp.json` present; Codex CLI on PATH (optional, warns if missing); `jq` on PATH (required by audit + probe tools); `--critical` flag enables extra checks for critical-allowlist content and hook-script executability. Output is a markdown report with per-check verdict (✓ ok / ⚠ warn / ✗ FAIL); exit non-zero only on FAIL (warnings advisory). Wrapped by `/code4me-preflight [--critical] [--quiet]` slash command. SKILL.md updated to list it in the slash-commands section.
 - **Diataxis docs split (C1)** — the 430-line monolithic README has been split into four-quadrant Diataxis structure under `docs/`:
   - `docs/tutorial.md` — 10-minute "first milestone" walkthrough
@@ -934,7 +934,6 @@ The Playwright softening is straightforward: the v0.7 starter shipped with Playw
   - `docs/howto-configure-lsp.md` — enabling LSP for C# / Swift / C++ / Python + adding another language
   - `docs/howto-enable-codex.md` — Codex CLI setup, the seven shims, per-use-case mode reference, failure modes
   - `docs/howto-enable-cross-vendor.md` — opt-in alternation rule (v0.7+) walkthrough
-  - `docs/howto-use-spec-kit.md` — Spec Kit interop usage (v0.9+)
   - `docs/reference.md` — workflow weights, Standard Mode flow, all 15 subagents, slash commands, model tiers, cross-vendor pairing, runtime hooks, audit/analytics, context-queries schema, dispatch log JSONL shape, full folder layout
   - `docs/explanation.md` — design-decision rationale: why four weights, why auto-escalation override, why Co-Approval, why Producer-as-orchestrator, why declarative context_queries, why slim SKILL+playbook+references, why Test Protection Rule, why opt-in cross-vendor, why hooks ask not deny, why probes instead of unit tests, why no codex-qa or codex-researcher, why orchestrator on Opus, what ETHOS provides, why the framework still ships at 0.x
   - **New ~80-line root `README.md`** that points at the four quadrants instead of trying to be all four at once
@@ -943,14 +942,13 @@ The Playwright softening is straightforward: the v0.7 starter shipped with Playw
 
 ### Changed (workflow + docs cut)
 
-- **`skills/code4me/SKILL.md`** — operating loop gains a Spec Kit detection step at intake (step 2 sub-bullet); "Available reference files" lists `references/spec-kit-interop.md`; slash-commands section lists `/code4me-preflight`.
+- **`skills/code4me/SKILL.md`** — slash-commands section lists `/code4me-preflight`.
 - **`probes/README.md`** — "Baselines" section rewritten to cover the v0.8 programmatic runner workflow alongside the original manual approach; pointers to `docs/probe-baselines.md` for the full discipline.
 
 ### Why (workflow + docs cut)
 
 Three independent improvements grouped for momentum:
 
-- **Spec Kit interop** addresses a real friction: users who've already invested in Spec Kit's portable spec.md/plan.md format shouldn't have to re-derive the same content through code4me's Product Coach. The interop respects the upstream artifacts while preserving code4me's downstream gates (Challenger review, Co-Approval, Spec-to-Test, the canonical quality gate loop). It's additive — no Spec Kit, no behaviour change.
 - **Pre-flight sanity checks** make Critical milestones safer to invoke. The `--critical` flag's extra checks (allowlist content, hook scripts on disk) catch the most common "I forgot to configure X before dispatching Critical work" cases. The slash command makes it user-invokable; the orchestrator's playbook gains a recommendation to run it before Critical dispatches. Failure modes are now visible up front rather than mid-dispatch.
 - **The Diataxis split** is the single most-cited improvement from the original v0.7 plan. The 430-line monolithic README was correct content but wrong shape: it tried to be reference + tutorial + how-to + explanation simultaneously. Each Diataxis quadrant serves a distinct mode of reading — tutorials for learning, how-tos for doing, reference for looking up, explanation for understanding. The new ~80-line root README is the table of contents; the docs/ files are each focused on one mode. External readers can now find what they need; the internal author (you) can update one quadrant without rippling through the others.
 
@@ -971,7 +969,7 @@ And — same as always, for the fifth version in a row — **live-testing**. v0.
 Two items remain on the v0.9 plan after this cut:
 
 1. **Doc polish** — C1 Diataxis README split, C3 probe-baseline note (documents how to capture baselines for the v0.8 regression budget), B4 trace-review discipline doc (operationalises Hamel Husain's 30-minute trace-reading practice against the v0.8 audit-tool extensions).
-2. **Workflow integrations** — E1 Spec Kit interop (accept `specs/<feature>/spec.md` + `plan.md` as Milestone Spec + Tech Spec inputs; skip redundant subagents), F2 pre-flight sanity probes (run before Critical dispatch; checks `.code4me/`, hooks installed, LSP reachable, Codex CLI present if codex-* shims will fire).
+2. **Workflow integrations** — F2 pre-flight sanity probes (run before Critical dispatch; checks `.code4me/`, hooks installed, LSP reachable, Codex CLI present if codex-* shims will fire).
 
 Tier-3 shims (codex-qa, codex-researcher) are explicitly closed as of this cut: the user has chosen to keep QA and Researcher Claude-only, and the deferred-list framing those as "pending live-test signal" no longer applies.
 

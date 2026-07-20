@@ -66,7 +66,7 @@ This makes the Producer's reasoning auditable. Probes can verify "given this tas
 
 ## What's currently built
 
-All current subagents are implemented (twelve core + two opt-in external-vendor shims = fourteen total):
+All 12 native agent roles are implemented:
 
 - ✅ `developer` — `agents/developer.md`
 - ✅ `combined-reviewer` — `agents/combined-reviewer.md` (Conversation/Light combined-pass reviewer)
