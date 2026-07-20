@@ -50,6 +50,15 @@ eq "stale path removed"         "$(jq '[.hooks.PreToolUse[].hooks[]|select(.comm
     eq "structural hook wired once" "$(jq '[.hooks.PreToolUse[].hooks[]|select(.command|test("'"$ROOT"'/hooks/check-structural-first-on-source.sh"))]|length' "$P2/.claude/settings.json")" "1"
     eq "obsolete code4me hook not re-added" "$(jq '[.hooks.PreToolUse[].hooks[]|select(.command|test("check-obsolete-memory.sh"))]|length' "$P2/.claude/settings.json")" "0"
 
+echo "== repair trailing carriage return in managed command =="
+P2B="$WORK/p2b"; mkdir -p "$P2B/.claude"
+jq -n --arg command $'bash C:/stale/code4me/hooks/check-test-protection.sh\r' \
+    '{hooks:{PreToolUse:[{matcher:"Edit",hooks:[{type:"command",command:$command}]}]}}' \
+    > "$P2B/.claude/settings.json"
+bash "$INSTALL" --project "$P2B" --no-lsp >/dev/null
+eq "corrupted managed command replaced" "$(jq '[.hooks.PreToolUse[].hooks[].command|select(endswith("\r"))]|length' "$P2B/.claude/settings.json")" "0"
+eq "installer output is LF-only" "$(LC_ALL=C tr -cd '\r' < "$P2B/.claude/settings.json" | wc -c | tr -d ' ')" "0"
+
 echo "== dry-run writes nothing =="
 P3="$WORK/p3"; mkdir -p "$P3"
 bash "$INSTALL" --project "$P3" --dry-run >/dev/null

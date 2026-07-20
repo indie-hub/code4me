@@ -202,7 +202,9 @@ jobs:
           bash -n bin/code4me-preflight
 
       - name: Windows path-normalization regression test
-        run: bash tests/hooks/test-windows-paths.sh
+        run: |
+          bash tests/hooks/test-windows-paths.sh
+          bash tests/install/test-preflight-crlf.sh
 
       - name: Model, audit, probe, and wrapper behavioral tests
         run: |

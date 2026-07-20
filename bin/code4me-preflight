@@ -125,15 +125,20 @@ fi
 # (re)run bin/code4me-install, which self-locates the plugin and rewrites paths.
 if [ -r "$SETTINGS" ] && command -v jq >/dev/null 2>&1; then
     BAD_PATHS=""
+    JQ_MANAGED_HOOKS='.hooks.PreToolUse[]?.hooks[]?.command // empty
+        | select(test("/hooks/(check-test-protection|check-forbidden-conditions|check-critical-write-allowlist|check-lsp-first-on-source|check-structural-first-on-source)\\.sh") or test("code4me[^[:space:]\"]*/hooks/check-[^[:space:]\"]+\\.sh"))'
+    if jq -e "$JQ_MANAGED_HOOKS | select(endswith(\"\\r\"))" "$SETTINGS" >/dev/null 2>&1; then
+        BAD_PATHS="[settings.json: managed hook command ends with a carriage return; rerun installer] "
+    fi
     while IFS= read -r cmdpath; do
+        # Native Windows jq emits CRLF; Bash read removes LF but retains CR.
+        cmdpath=${cmdpath%$'\r'}
         [ -n "$cmdpath" ] || continue
         case "$cmdpath" in
             *"<PLUGIN_DIR>"*) BAD_PATHS="${BAD_PATHS}[$cmdpath: unsubstituted <PLUGIN_DIR>] " ; continue ;;
         esac
         [ -r "$cmdpath" ] || BAD_PATHS="${BAD_PATHS}[$cmdpath: missing] "
-    done < <(jq -r '.hooks.PreToolUse[]?.hooks[]?.command // empty
-                    | select(test("/hooks/(check-test-protection|check-forbidden-conditions|check-critical-write-allowlist|check-lsp-first-on-source|check-structural-first-on-source)\\.sh") or test("code4me[^[:space:]\"]*/hooks/check-[^[:space:]\"]+\\.sh"))
-                    | sub("^bash +";"")' "$SETTINGS" 2>/dev/null)
+    done < <(jq -r "$JQ_MANAGED_HOOKS | select(endswith(\"\\r\") | not) | sub(\"^bash +\";\"\")" "$SETTINGS" 2>/dev/null)
     if [ -n "$BAD_PATHS" ]; then
         record "Hook command paths" fail "code4me hook command(s) don't resolve: ${BAD_PATHS% } — run: bash $PLUGIN_ROOT/bin/code4me-install"
     else
