@@ -25,7 +25,7 @@ jq -e '.hooks.PreToolUse | length == 2' "$MANIFEST" >/dev/null && ok "Codex PreT
 jq -e '.hooks.SessionStart | length == 1' "$MANIFEST" >/dev/null && ok "Codex SessionStart bundled" || bad "Codex SessionStart bundled"
 grep -F -q 'codex-pretool-adapter.sh' "$MANIFEST" && ok "standard plugin hook manifest owns adapter" || bad "standard plugin hook manifest owns adapter"
 
-preflight="$(cd "$ROOT" && CODEX_THREAD_ID=test bash bin/code4me-preflight 2>&1 || true)"
+preflight="$(cd "$ROOT" && env CODEX_THREAD_ID=test bash bin/code4me-preflight 2>&1 || true)"
 printf '%s' "$preflight" | grep -q '| Codex hook bundle | .* ok |' && ok "Codex preflight requires bundled hooks" || bad "Codex preflight requires bundled hooks"
 if printf '%s' "$preflight" | grep -q '| Hook installation |'; then bad "Codex preflight ignores Claude project hooks"; else ok "Codex preflight ignores Claude project hooks"; fi
 
@@ -58,10 +58,10 @@ payload="$(jq -nc '{tool_name:"Bash",tool_input:{command:"rg Login src/auth/Logi
 out="$(cd "$TMP" && printf '%s' "$payload" | PLUGIN_ROOT="$ROOT" bash "$ADAPTER" check-structural-first-on-source.sh)"
 assert_decision "source Bash search" deny "$out"
 
-direct="$(cd "$TMP" && jq -nc --arg p "$TMP/tests/AuthTest.cs" '{tool_name:"Edit",tool_input:{file_path:$p}}' | bash "$ROOT/hooks/check-test-protection.sh")"
+direct="$(cd "$TMP" && MSYS2_ARG_CONV_EXCL='*' jq -nc --arg p "$TMP/tests/AuthTest.cs" '{tool_name:"Edit",tool_input:{file_path:$p}}' | CLAUDE_PROJECT_DIR="$TMP" bash "$ROOT/hooks/check-test-protection.sh")"
 assert_decision "Claude direct hook remains ask" ask "$direct"
 
-adapter_direct="$(cd "$TMP" && jq -nc --arg p "$TMP/tests/AuthTest.cs" '{tool_name:"Edit",tool_input:{file_path:$p}}' | bash "$ADAPTER" check-test-protection.sh)"
+adapter_direct="$(cd "$TMP" && MSYS2_ARG_CONV_EXCL='*' jq -nc --arg p "$TMP/tests/AuthTest.cs" '{tool_name:"Edit",tool_input:{file_path:$p}}' | CLAUDE_PROJECT_DIR="$TMP" bash "$ADAPTER" check-test-protection.sh)"
 assert_decision "Claude plugin adapter avoids duplicate write gate" pass "$adapter_direct"
 
 printf '\nPASS: %d   FAIL: %d\n' "$PASS" "$FAIL"
