@@ -126,7 +126,7 @@ See `docs/howto-enable-cross-vendor.md` for the operational walkthrough.
 
 ## Runtime hooks
 
-Three state-backed PreToolUse guards plus structural-first routing ship with the plugin. Claude project hooks return `ask`; Codex's bundled adapter returns `deny` because Codex does not support `ask`. State-backed guards pass through when their state file is absent. See `docs/howto-install-hooks.md`.
+Three state-backed PreToolUse write guards plus structural-first routing ship with the plugin. Claude write guards return `ask`; Codex's bundled adapter returns `deny` because Codex does not support `ask`. Structural-first only adds guidance through `additionalContext`, with no permission decision. State-backed guards pass through when their state file is absent. See `docs/howto-install-hooks.md`.
 
 | Hook | Fires when | State file |
 |---|---|---|

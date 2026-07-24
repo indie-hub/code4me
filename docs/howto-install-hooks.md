@@ -50,7 +50,7 @@ Review and trust the code4me hook definition. Codex skips untrusted hooks and as
 | `check-critical-write-allowlist.sh` | Critical-Mode write scope | `.code4me/critical-allowlist.txt` |
 | `check-structural-first-on-source.sh` | codegraph/CocoIndex precedence over raw source searches | Source-search tool call |
 
-The first three guards are dormant when their state file is absent. The structural-first guard remains active and redirects source discovery toward structural indexes.
+The first three guards are dormant when their state file is absent. Structural-first remains active as a non-blocking additional-context nudge toward structural indexes.
 
 ## Verify
 

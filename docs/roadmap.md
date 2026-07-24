@@ -63,7 +63,7 @@ CHANGELOG reference: v0.11.0-dev "Open questions deferred to v0.11.x".
 **Scope:** ~3-line patch per hook + one paragraph in each `docs/howto-*.md`  
 **Idea source:** `affaan-m/ECC`'s `ECC_HOOK_PROFILE` and `ECC_DISABLED_HOOKS`
 
-`CODE4ME_HOOK_PROFILE=minimal|standard|strict` + `CODE4ME_DISABLED_HOOKS="check-structural-first-on-source,..."` so a user can flip any hook off for a single session without uninstalling. **Trigger condition:** ask-gate noise becomes a real complaint during soak.
+`CODE4ME_HOOK_PROFILE=minimal|standard|strict` + `CODE4ME_DISABLED_HOOKS="check-structural-first-on-source,..."` so a user can flip any hook off for a single session without uninstalling. **Trigger condition:** hook noise becomes a real complaint during soak.
 
 CHANGELOG reference: v0.11.0-dev "Open questions deferred to v0.11.x".
 
@@ -194,7 +194,7 @@ Pre-indexed cross-language knowledge graph (tree-sitter → SQLite + FTS5) with 
 
 Complementary to LSP, not a replacement (LSP keeps live diagnostics, completion, full type inference).
 
-**Trigger condition for revisiting:** if the structural-first hook's ask-gate rate stays above ~30% of dispatch volume after a month of soak. That signals agents are asking task-shaped questions LSP doesn't answer well — `codegraph_context` is the stronger redirect target.
+**Trigger condition for revisiting:** if the structural-first hook's nudge rate stays above ~30% of dispatch volume after a month of soak. That signals agents are asking task-shaped questions LSP doesn't answer well — `codegraph_context` is the stronger redirect target.
 
 **Costs to adopt:** another dependency (Node + npm + per-project `.codegraph/` SQLite), a third "code-knowledge" surface (alongside LSP and context-mode) requiring updated precedence rules in `references/code-consultation-precedence.md`, and the codegraph project's maturity risk (552 stars, 0 releases, 237 commits — active but young).
 
@@ -210,7 +210,7 @@ A few observations across the current ear-tag set:
 2. **Four items are probes.** Healthy ratio — probes are the spec; new behaviour should always have a probe.
 3. **Only one item is a behavioural orchestrator change** (the cross-vendor bridge post-validation). The rest are observability, portability, or community-infra. That's a sign the orchestrator core is in a stable shape; remaining work is polish.
 4. **No vendor additions are ear-tagged.** Three vendors (Anthropic, OpenAI via codex-bridge, DeepSeek via deepseek-bridge) is the right number for now. A fourth would be high-leverage only if it differs qualitatively from the three — a privacy-focused local-only inference vendor would qualify; another OpenAI-compatible API wouldn't.
-5. **Two items have explicit trigger conditions.** CodeGraph/CocoIndex (structural-first ask-gate rate >30% for a month) and Hook runtime gating (ask-gate noise becomes a complaint). The rest are pure prioritisation — they ship when someone has the appetite to ship them. The trigger-gated items are the most resistant to scope creep because the condition is measurable.
+5. **Two items have explicit trigger conditions.** CodeGraph/CocoIndex (structural-first nudge rate >30% for a month) and Hook runtime gating (hook noise becomes a complaint). The rest are pure prioritisation — they ship when someone has the appetite to ship them. The trigger-gated items are the most resistant to scope creep because the condition is measurable.
 
 ---
 

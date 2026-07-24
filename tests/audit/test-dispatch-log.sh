@@ -21,6 +21,10 @@ cat > "$LOG" <<'JSONL'
 {"task":"codex","subagent":"code-reviewer","weight":"Standard","vendor":"openai","model_tier":"mid","effort":"high","default_effort":"medium","effort_deviated_from_default":true,"effort_source":"explicit_deviation","effort_applied":true,"outcome":"COMPLETE"}
 {"task":"reasonix","subagent":"verification","weight":"Standard","vendor":"deepseek","model_tier":"mid","effort":"medium","default_effort":"medium","effort_deviated_from_default":false,"effort_source":"default","effort_applied":false,"outcome":"COMPLETE"}
 JSONL
+cat > "$WORK/structural-first-events.jsonl" <<'JSONL'
+{"event":"ask-gate","tool":"Read","reason":"legacy blocking event"}
+{"event":"nudge","tool":"Grep","reason":"current non-blocking event"}
+JSONL
 
 OUT="$(bash "$SCRIPT" "$LOG")"
 RC=$?
@@ -32,6 +36,8 @@ has "reports applied backend" "| applied | 1 |"
 has "reports unsupported backend" "| not applied | 1 |"
 has "reports recorded count" 'Recorded effort: **2 of 3** dispatches'
 has "reports deviation count" 'deviated from default: **1**'
+has "counts only current nudges" 'Nudges emitted by `check-structural-first-on-source.sh`: **1**'
+has "reports legacy structural events separately" 'Legacy blocking structural-first events retained in this log: **1**'
 
 printf '\nPASS: %d   FAIL: %d\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

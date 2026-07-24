@@ -2,7 +2,7 @@
 
 **A multi-agent SDLC orchestrator for Claude Code and Codex.** Turn a one-line user request into a structured workflow: a lead architect designs, a challenger architect critiques, a spec-to-test engineer authors the test gate, a developer implements, and a quality-gate loop (verification + code review + QA) attests the work — all dispatched as agent roles, with optional cross-vendor pairing through OpenAI's Codex CLI or DeepSeek's Reasonix CLI for dialectic.
 
-**Status:** `0.15.4-dev` — Claude Code and Codex share one installable workflow with client-aware hooks and project initialization.
+**Status:** `0.15.5-dev` — Claude Code and Codex share one installable workflow with client-aware hooks and project initialization.
 
 ## What it does, concretely
 
@@ -116,7 +116,7 @@ Codex hooks are bundled with the plugin and require no project hook file. In Cod
 /hooks
 ```
 
-Review and trust the code4me hooks. Repeat this whenever an update changes their definition. Claude uses approval prompts for guarded actions; Codex denies the same guarded call with an actionable explanation because Codex PreToolUse does not support `ask`.
+Review and trust the code4me hooks. Repeat this whenever an update changes their definition. Claude uses approval prompts for write-guarded actions; Codex denies the same guarded writes with an actionable explanation because Codex PreToolUse does not support `ask`. Structural-first only adds non-blocking guidance.
 
 ### 8. Index the project
 
@@ -148,8 +148,8 @@ See [Run code4me with Codex](docs/howto-run-with-codex.md), the [tutorial](docs/
 1. **Five workflow weights, not one process.** Trivial / Conversation / Light / Standard / Critical. The orchestrator classifies per-request and runs the smallest workflow that satisfies the stakes. A typo fix doesn't pay Standard-Mode dispatch overhead; a Critical change gets dual architect Co-Approval, full quality-gate loop, and Security Review. v0.13 adds an orthogonal **solo execution mode**: on explicit request, the orchestrator implements Conversation/Light/Standard work inline — loop speed — while still dispatching one fresh-context review gate and keeping the protection hooks binding on its own edits.
 2. **The Producer is the orchestrator, you're the Product Owner.** No separate PM role to coordinate. The orchestrator does classification, team composition, dispatch, persistence, and routing. You confirm intent, sign off on closes, and stay out of the dispatch loop.
 3. **Adaptive routing without silent vendor changes.** Model profile and reasoning effort are separate decisions. Vendor bridges remain explicit opt-ins; changing effort never enables Codex, DeepSeek, or Claude wrapper participation.
-4. **Hooks guard the workflow.** Four PreToolUse hooks cover test protection, Conversation-Mode forbidden conditions, Critical-Mode write scope, and structural-first routing. Claude receives approval prompts. Codex blocks matching calls because its PreToolUse API does not support an `ask` decision; resolve the condition or update the relevant `.code4me` policy before retrying.
-5. **Probes are the spec.** Every behaviour the orchestrator promises has a corresponding probe under `probes/`. Regressions are caught by running the probe suite (`bin/code4me-probe-run`). The audit tool (`bin/code4me-audit-dispatch-log`) reads the dispatch-log JSONL to surveille drift in dispatch patterns, cost rollups, hook ask-gate rates, and Trivial-weight classification frequency.
+4. **Hooks guard the workflow.** Three PreToolUse write guards cover test protection, Conversation-Mode forbidden conditions, and Critical-Mode write scope. Claude receives approval prompts; Codex blocks matching writes because its PreToolUse API does not support an `ask` decision. Structural-first routing is a non-blocking nudge that adds codegraph/CocoIndex guidance without granting or denying the tool call.
+5. **Probes are the spec.** Every behaviour the orchestrator promises has a corresponding probe under `probes/`. Regressions are caught by running the probe suite (`bin/code4me-probe-run`). The audit tool (`bin/code4me-audit-dispatch-log`) reads the dispatch-log JSONL to surveille drift in dispatch patterns, cost rollups, structural-first nudge rates, and Trivial-weight classification frequency.
 
 ## Optional integrations
 

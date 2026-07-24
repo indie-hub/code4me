@@ -27,9 +27,10 @@ if [ "$CODEX_HOOK_RUNTIME" -eq 0 ] && [ "$HOOK_NAME" != "check-structural-first-
 fi
 
 run_guard() {
-    local payload="$1" output decision
+    local payload="$1" output decision context
     output="$(printf '%s' "$payload" | bash "$HOOK_DIR/$HOOK_NAME" 2>/dev/null || true)"
     decision="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision // empty' 2>/dev/null || true)"
+    context="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null || true)"
     if [ "$decision" = "ask" ] && [ "$CODEX_HOOK_RUNTIME" -eq 1 ]; then
         printf '%s' "$output" | jq '
             .hookSpecificOutput.permissionDecision = "deny"
@@ -38,6 +39,10 @@ run_guard() {
         return 10
     fi
     if [ "$decision" = "ask" ]; then
+        printf '%s' "$output"
+        return 10
+    fi
+    if [ -n "$context" ]; then
         printf '%s' "$output"
         return 10
     fi

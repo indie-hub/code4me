@@ -31,9 +31,9 @@ as a legacy optional fallback for type-precise language-server features.
 ## Runtime hook
 
 `hooks/check-structural-first-on-source.sh` detects `.codegraph/codegraph.db` and
-guards common fallback shapes, including whole-file source `Read`, bare-symbol
-`Grep`, and context-mode source searches. Claude asks for approval; Codex denies
-the call with fallback guidance. The event log is
+nudges common fallback shapes, including whole-file source `Read`, bare-symbol
+`Grep`, and context-mode source searches. Claude and Codex receive guidance as
+additional context without pausing or authorizing the call. The event log is
 `.code4me/structural-first-events.jsonl`.
 
 The old `check-lsp-first-on-source.sh` path remains a compatibility wrapper.

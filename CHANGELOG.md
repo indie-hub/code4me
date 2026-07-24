@@ -4,10 +4,11 @@ All notable changes to this plugin will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.15.4-dev] — in progress
+## [0.15.5-dev] — in progress
 
 ### Changed
 
+- Structural-first source routing is now a non-blocking `additionalContext` nudge in Claude and Codex. It emits no permission decision, while the three state-backed write guards retain Claude `ask` and Codex `deny` behavior.
 - `/code4me-init` is now client-aware and project-only: Codex gets `AGENTS.md`, Claude Code gets `CLAUDE.md`, and both get `.code4me/`. Init no longer duplicates installer ownership by creating MCP, hook, or LSP configuration.
 - Codex hooks are now a required plugin-bundled surface instead of an optional project template. A Codex adapter checks every path in `apply_patch` payloads and maps unsupported `ask` gates to actionable denies; Claude keeps its existing approval prompts.
 - Installation and hook documentation now provides one complete Claude/Codex setup flow, and the retired external specification workflow has been removed from guidance, probes, and history.

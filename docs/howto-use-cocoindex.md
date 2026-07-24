@@ -48,8 +48,8 @@ The MCP server exposes `search(query, limit, paths, languages)`.
 ## code4me behavior
 
 `hooks/check-structural-first-on-source.sh` detects `ccc` or
-`.cocoindex_code/` and asks agents to use CocoIndex before context-mode, `Read`,
-or `Grep` for source-code discovery.
+`.cocoindex_code/` and adds a non-blocking nudge to use CocoIndex before
+context-mode, `Read`, or `Grep` for source-code discovery.
 
 Run preflight to confirm:
 

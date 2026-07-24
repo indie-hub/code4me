@@ -141,40 +141,44 @@ if [ "$SOLO_INLINE_COUNT" -gt 0 ]; then
 fi
 
 # Structural-first surveillance (v0.13.1+).
-# Reads .code4me/structural-first-events.jsonl. High ask-gate rate relative to
+# Reads .code4me/structural-first-events.jsonl. A high nudge rate relative to
 # dispatch volume signals that subagents are still defaulting to context-mode,
 # Read, or Grep before codegraph/CocoIndex for source-code lookup.
 STRUCTURAL_EVENTS_LOG="$(dirname "$LOG")/structural-first-events.jsonl"
 if [ -r "$STRUCTURAL_EVENTS_LOG" ]; then
-    STRUCTURAL_EVENT_COUNT=$(wc -l < "$STRUCTURAL_EVENTS_LOG" | tr -d ' ')
+    STRUCTURAL_EVENT_COUNT=$(jq -r 'select(.event == "nudge") | .event' "$STRUCTURAL_EVENTS_LOG" 2>/dev/null | wc -l | tr -d ' ')
+    LEGACY_STRUCTURAL_EVENT_COUNT=$(jq -r 'select((.event // "ask-gate") == "ask-gate") | .event' "$STRUCTURAL_EVENTS_LOG" 2>/dev/null | wc -l | tr -d ' ')
     if [ "$STRUCTURAL_EVENT_COUNT" -gt 0 ]; then
         STRUCTURAL_RATIO=$(awk -v e="$STRUCTURAL_EVENT_COUNT" -v n="$TOTAL" 'BEGIN { printf "%.1f", (e/n)*100 }')
         printf '## Structural-first surveillance (v0.13.1+)\n\n'
-        printf 'Ask-gates fired by `check-structural-first-on-source.sh`: **%s** (ratio to dispatches: %s%%)\n\n' "$STRUCTURAL_EVENT_COUNT" "$STRUCTURAL_RATIO"
+        printf 'Nudges emitted by `check-structural-first-on-source.sh`: **%s** (ratio to dispatches: %s%%)\n\n' "$STRUCTURAL_EVENT_COUNT" "$STRUCTURAL_RATIO"
 
         OVER_STRUCTURAL_THRESHOLD=$(awk -v e="$STRUCTURAL_EVENT_COUNT" -v n="$TOTAL" 'BEGIN { print (e/n > 0.20) }')
         if [ "$OVER_STRUCTURAL_THRESHOLD" = "1" ]; then
-            printf '> **⚠ Structural-first ask-gate rate exceeds 20%% of dispatch volume.**\n> Subagents are still reaching for context-mode, Read, or Grep before codegraph/CocoIndex\n> on source-code lookup. Review the patterns below and consider strengthening the precedence rule in\n> `references/code-consultation-precedence.md`, or tightening the toolbelt\n> scope of developer/code-reviewer/verification.\n\n'
+            printf '> **⚠ Structural-first nudge rate exceeds 20%% of dispatch volume.**\n> Subagents are still reaching for context-mode, Read, or Grep before codegraph/CocoIndex\n> on source-code lookup. Review the patterns below and consider strengthening the precedence rule in\n> `references/code-consultation-precedence.md`, or tightening the toolbelt\n> scope of developer/code-reviewer/verification.\n\n'
         fi
 
         # Per-shape breakdown.
-        printf '### Ask-gate shape breakdown\n\n'
+        printf '### Nudge shape breakdown\n\n'
         printf '| Reason | Count |\n|---|---:|\n'
-        jq -r '.reason' "$STRUCTURAL_EVENTS_LOG" 2>/dev/null | sort | uniq -c | sort -rn | \
+        jq -r 'select(.event == "nudge") | .reason' "$STRUCTURAL_EVENTS_LOG" 2>/dev/null | sort | uniq -c | sort -rn | \
             awk '{ count = $1; $1 = ""; sub(/^[[:space:]]+/, ""); printf "| %s | %s |\n", $0, count }'
         printf '\n'
 
         # Per-tool breakdown.
-        printf '### Ask-gates by tool\n\n'
+        printf '### Nudges by tool\n\n'
         printf '| Tool | Count |\n|---|---:|\n'
-        jq -r '.tool' "$STRUCTURAL_EVENTS_LOG" 2>/dev/null | sort | uniq -c | sort -rn | \
+        jq -r 'select(.event == "nudge") | .tool' "$STRUCTURAL_EVENTS_LOG" 2>/dev/null | sort | uniq -c | sort -rn | \
             awk '{ count = $1; $1 = ""; sub(/^[[:space:]]+/, ""); printf "| `%s` | %s |\n", $0, count }'
         printf '\n'
 
         # Recent samples (last 5).
-        printf '### Recent ask-gates (last 5)\n\n'
-        tail -5 "$STRUCTURAL_EVENTS_LOG" | jq -r '"- `\(.ts)` [\(.reason)]: `\(.haystack_head // "")`"' 2>/dev/null
-        printf '\n_If many recent entries are genuinely text-shaped searches, proceed-rate is expected and not drift. If they are source lookup queries that codegraph or CocoIndex could have narrowed, the precedence rule needs reinforcement._\n\n'
+        printf '### Recent nudges (last 5)\n\n'
+        jq -c 'select(.event == "nudge")' "$STRUCTURAL_EVENTS_LOG" 2>/dev/null | tail -5 | jq -r '"- `\(.ts)` [\(.reason)]: `\(.haystack_head // "")`"' 2>/dev/null
+        printf '\n_If many recent entries are genuinely text-shaped searches, the nudges are expected and not drift. If they are source lookup queries that codegraph or CocoIndex could have narrowed, the precedence rule needs reinforcement._\n\n'
+    fi
+    if [ "$LEGACY_STRUCTURAL_EVENT_COUNT" -gt 0 ]; then
+        printf '_Legacy blocking structural-first events retained in this log: **%s**. They are excluded from the nudge metrics above._\n\n' "$LEGACY_STRUCTURAL_EVENT_COUNT"
     fi
 fi
 

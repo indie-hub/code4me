@@ -13,9 +13,17 @@ ok() { PASS=$((PASS+1)); printf '  ok   %s\n' "$1"; }
 bad() { FAIL=$((FAIL+1)); printf '  FAIL %s\n' "$1"; }
 
 assert_decision() {
-    local desc="$1" want="$2" output="$3" got
+    local desc="$1" want="$2" output="$3"
+    local got
     got="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision // "pass"' 2>/dev/null || printf invalid)"
     if [ "$got" = "$want" ]; then ok "$desc -> $got"; else bad "$desc (expected $want, got $got: $output)"; fi
+}
+
+assert_context() {
+    local desc="$1" output="$2" pattern="$3"
+    local context
+    context="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null || true)"
+    if printf '%s' "$context" | grep -q "$pattern"; then ok "$desc"; else bad "$desc (missing $pattern: $output)"; fi
 }
 
 command -v jq >/dev/null 2>&1 || { echo "jq required"; exit 2; }
@@ -44,7 +52,7 @@ assert_decision "protected apply_patch path" deny "$out"
 
 payload="$(jq -nc --arg patch $'*** Begin Patch\n*** Add File: migrations/001_init.sql\n+create table x;\n*** End Patch' '{tool_name:"apply_patch",tool_input:{command:$patch}}')"
 out="$(cd "$TMP" && printf '%s' "$payload" | PLUGIN_ROOT="$ROOT" bash "$ADAPTER" check-forbidden-conditions.sh)"
-assert_decision "forbidden added path" deny "$out"
+assert_decision "forbidden apply_patch path" deny "$out"
 
 payload="$(jq -nc --arg patch $'*** Begin Patch\n*** Update File: src/billing/Charge.cs\n@@\n-old\n+new\n*** End Patch' '{tool_name:"apply_patch",tool_input:{command:$patch}}')"
 out="$(cd "$TMP" && printf '%s' "$payload" | PLUGIN_ROOT="$ROOT" bash "$ADAPTER" check-critical-write-allowlist.sh)"
@@ -56,13 +64,15 @@ assert_decision "in-scope apply_patch path" pass "$out"
 
 payload="$(jq -nc '{tool_name:"Bash",tool_input:{command:"rg Login src/auth/Login.cs"}}')"
 out="$(cd "$TMP" && printf '%s' "$payload" | PLUGIN_ROOT="$ROOT" bash "$ADAPTER" check-structural-first-on-source.sh)"
-assert_decision "source Bash search" deny "$out"
+assert_decision "Codex source Bash search" pass "$out"
+assert_context "Codex source Bash search receives guidance" "$out" "codegraph_explore"
 
 direct="$(cd "$TMP" && MSYS2_ARG_CONV_EXCL='*' jq -nc --arg p "$TMP/tests/AuthTest.cs" '{tool_name:"Edit",tool_input:{file_path:$p}}' | CLAUDE_PROJECT_DIR="$TMP" bash "$ROOT/hooks/check-test-protection.sh")"
-assert_decision "Claude direct hook remains ask" ask "$direct"
+assert_decision "Claude direct write hook remains ask" ask "$direct"
 
 adapter_direct="$(cd "$TMP" && MSYS2_ARG_CONV_EXCL='*' jq -nc --arg p "$TMP/tests/AuthTest.cs" '{tool_name:"Edit",tool_input:{file_path:$p}}' | CLAUDE_PROJECT_DIR="$TMP" bash "$ADAPTER" check-test-protection.sh)"
-assert_decision "Claude plugin adapter avoids duplicate write gate" pass "$adapter_direct"
+assert_decision "Claude adapter ignores duplicate write hook" pass "$adapter_direct"
 
-printf '\nPASS: %d   FAIL: %d\n' "$PASS" "$FAIL"
+echo ""
+printf 'PASS: %d   FAIL: %d\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

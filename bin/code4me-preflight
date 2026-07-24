@@ -288,7 +288,7 @@ fi
 # context-mode/Grep for graph-shaped source-code lookup.
 if command -v codegraph >/dev/null 2>&1; then
     if [ -r "$PROJECT_DIR/.codegraph/codegraph.db" ]; then
-        record "codegraph (optional)" ok "codegraph CLI on PATH; .codegraph/codegraph.db indexed for this project — structural-first redirects will list codegraph_* tools before context-mode"
+        record "codegraph (optional)" ok "codegraph CLI on PATH; .codegraph/codegraph.db indexed for this project — structural-first nudges will list codegraph_* tools before context-mode"
     else
         record "codegraph (optional)" warn "codegraph CLI on PATH but project not indexed yet — run 'codegraph init -i' at the project root to build .codegraph/codegraph.db" 0
     fi
@@ -302,7 +302,7 @@ fi
 # CocoIndex for natural-language and fuzzy source discovery.
 if command -v ccc >/dev/null 2>&1; then
     if [ -d "$PROJECT_DIR/.cocoindex_code" ]; then
-        record "CocoIndex Code (optional)" ok "ccc on PATH; .cocoindex_code/ exists for this project — structural-first redirects will list CocoIndex before context-mode"
+        record "CocoIndex Code (optional)" ok "ccc on PATH; .cocoindex_code/ exists for this project — structural-first nudges will list CocoIndex before context-mode"
     else
         record "CocoIndex Code (optional)" warn "ccc on PATH but .cocoindex_code/ not found — run 'ccc index' at the project root before relying on CocoIndex search" 0
     fi

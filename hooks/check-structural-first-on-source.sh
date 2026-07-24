@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Code4Me PreToolUse hook - structural-index-first redirection for source code.
+# Code4Me PreToolUse hook - structural-index-first nudge for source code.
 #
 # When a tool call looks like source-code consultation by text search or a
-# whole-file read, ask the agent to use codegraph or CocoIndex first when either
+# whole-file read, nudge the agent to use codegraph or CocoIndex first when either
 # index is available. LSP remains a legacy optional fallback when a project still
 # has .lsp.json, but context-mode/grep/read should not jump ahead of the code
 # indexes for source-code lookup.
@@ -16,21 +16,20 @@ emit_pass_through() {
     exit 0
 }
 
-emit_ask() {
+emit_nudge() {
     local reason="$1"
     if command -v jq >/dev/null 2>&1; then
         jq -n --arg r "$reason" '{
             hookSpecificOutput: {
                 hookEventName: "PreToolUse",
-                permissionDecision: "ask",
-                permissionDecisionReason: $r
+                additionalContext: $r
             }
         }'
     else
         local escaped="${reason//\\/\\\\}"
         escaped="${escaped//\"/\\\"}"
         escaped="${escaped//$'\n'/\\n}"
-        printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"%s"}}' "$escaped"
+        printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"%s"}}' "$escaped"
     fi
     exit 0
 }
@@ -68,8 +67,8 @@ fi
 LSP_AVAILABLE=0
 [ -r "$PROJECT_DIR/.lsp.json" ] && LSP_AVAILABLE=1
 
-# If no structural code surface is present, stay quiet. The hook is a redirect,
-# not a blocker.
+# If no structural code surface is present, stay quiet. The hook is a nudge,
+# not a permission gate.
 if [ "$CODEGRAPH_AVAILABLE" -eq 0 ] && [ "$COCOINDEX_AVAILABLE" -eq 0 ] && [ "$LSP_AVAILABLE" -eq 0 ]; then
     emit_pass_through
 fi
@@ -171,7 +170,7 @@ log_event() {
         --argjson codegraph_available "$CODEGRAPH_AVAILABLE" \
         --argjson cocoindex_available "$COCOINDEX_AVAILABLE" \
         --argjson lsp_available "$LSP_AVAILABLE" \
-        '{ts:$ts, tool:$tool, reason:$reason, haystack_head:$haystack, codegraph_available:($codegraph_available == 1), cocoindex_available:($cocoindex_available == 1), lsp_available:($lsp_available == 1), event:"ask-gate"}' \
+        '{ts:$ts, tool:$tool, reason:$reason, haystack_head:$haystack, codegraph_available:($codegraph_available == 1), cocoindex_available:($cocoindex_available == 1), lsp_available:($lsp_available == 1), event:"nudge"}' \
         >> "$events_log" 2>/dev/null || true
     return 0
 }
@@ -202,9 +201,9 @@ LSP (legacy optional, type-precise fallback):
 "
 fi
 
-emit_ask "Source-code consultation detected (${REASON}).
+emit_nudge "Source-code consultation detected (${REASON}).
 
 Use the code indexes before context-mode, Grep, or whole-file Read for source lookup.${TOOLS_MSG}
-Use context-mode for derived analysis, logs, build output, docs, or non-source text after the code index has narrowed the area. Type \"yes\" to proceed anyway when the query is genuinely text-shaped, such as a regex inside comments or strings.
+Use context-mode for derived analysis, logs, build output, docs, or non-source text after the code index has narrowed the area.
 
 See skills/code4me/references/code-consultation-precedence.md for the ordering."
